@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Butt annotator</title>
+<style>
+:root{--bg:#1b1d21;--panel:#262a30;--text:#e6e6e6;--muted:#9aa0a8;--accent:#f0b429;--blind:#d9534f}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px system-ui,sans-serif;overflow:hidden}
+#bar{position:fixed;top:0;left:0;right:0;height:38px;background:var(--panel);display:flex;gap:14px;align-items:center;padding:0 10px;z-index:3;white-space:nowrap}
+#bar b{color:var(--accent)}#bar .blind{background:var(--blind);color:#fff;padding:2px 6px;border-radius:3px}
+#bar input[type=number]{width:56px;background:#111;color:var(--text);border:1px solid #444}
+#bar select{background:#111;color:var(--text);border:1px solid #444}
+#cv{position:fixed;top:38px;left:0;cursor:crosshair}
+#loupes{position:fixed;top:46px;display:flex;flex-direction:column;gap:6px;z-index:2;pointer-events:none}
+#loupes canvas{border:1px solid #888;background:#000;image-rendering:pixelated}
+#status{position:fixed;bottom:0;left:0;right:0;height:22px;background:var(--panel);color:var(--muted);padding:3px 10px;z-index:3}
+#help{position:fixed;bottom:28px;left:10px;max-width:min(560px,calc(100vw - 20px));background:#111e;border:1px solid #555;border-radius:4px;padding:6px 12px;z-index:4;line-height:1.6}
+#help summary{cursor:pointer;color:var(--accent);user-select:none}
+kbd{background:#333;border:1px solid #555;border-radius:3px;padding:0 4px}
+</style></head><body>
+<div id="bar">
+  <span id="name"></span><span id="split"></span><span id="st"></span><span id="idx"></span><span id="prog"></span>
+  <label>show <select id="filter"><option value="all">all</option><option>train</option><option>val</option><option>test</option></select></label>
+  <label><input type="checkbox" id="ov" checked> proposals <kbd>O</kbd></label>
+  <label>accept-all ≥ <input type="number" id="thr" step="0.05" min="0" max="1"> <kbd>T</kbd></label>
+  <label>loupe <input type="number" id="lsz" step="20" min="100" max="400"></label>
+  <span><kbd>H</kbd> controls</span>
+</div>
+<canvas id="cv"></canvas><div id="loupes"></div>
+<div id="status"></div>
+<details id="help"><summary>Controls <kbd>H</kbd></summary>
+<b>View</b>: wheel zoom · right- or middle-drag pan · <kbd>F</kbd> fit · <kbd>[</kbd> <kbd>]</kbd> loupe size<br>
+<b>Proposals</b> (train only, hollow, colour = filter score): <kbd>A</kbd> accept · <kbd>R</kbd> reject (the one under the cursor, else the selected one) · <kbd>T</kbd> accept all ≥ threshold · <kbd>O</kbd> overlay on/off<br>
+<b>Boxes</b>: left-drag on empty ground draws · click selects · drag inside moves · corner handles resize · <kbd>C</kbd> butt ↔ maybe · <kbd>Del</kbd> delete · <kbd>Z</kbd> undo<br>
+<b>Images</b>: <kbd>←</kbd> <kbd>→</kbd> prev/next · <kbd>Space</kbd> done + next · <kbd>N</kbd> next unseen · <kbd>U</kbd> back to unseen<br>
+Proposals whose centre lies inside one of your boxes are hidden and stored as covered, never as rejected.<br>Proposals still pending when an image is marked done are stored as rejected (implicit).<br>Every change saves at once.
+</details>
+<script>
+const $=id=>document.getElementById(id), cv=$('cv'), ctx=cv.getContext('2d');
+let CFG, LIST=[], order=[], cur=-1, img=null, W=0, H=0, rec=null, props=[], blind=false, hist=[];
+let s=1, ox=0, oy=0, mouse={x:0,y:0,in:false}, sel=null, drag=null, loupes=[];
+const api=(p,o)=>fetch(p,o).then(r=>r.json());
+
+async function init(){
+  CFG=await api('/api/config'); $('thr').value=CFG.accept_all_default; $('lsz').value=CFG.loupe_px;
+  buildLoupes(); LIST=await api('/api/list'); applyFilter(); resize();
+  go(order.findIndex(i=>LIST[i].status==='unseen') ?? 0);
+}
+function buildLoupes(){ $('loupes').innerHTML=''; loupes=CFG.loupe_zooms.map(z=>{const c=document.createElement('canvas');
+  c.width=c.height=+$('lsz').value; $('loupes').appendChild(c); return {z,c,x:c.getContext('2d')};}); }
+function applyFilter(){ const f=$('filter').value; order=LIST.map((_,i)=>i).filter(i=>f==='all'||LIST[i].split===f); }
+function resize(){ cv.width=innerWidth; cv.height=innerHeight-60; draw(); }
+
+async function go(k){
+  if(!order.length) return; k=Math.max(0,Math.min(order.length-1,k<0?0:k)); cur=k;
+  const it=LIST[order[k]]; blind=it.split!=='train';
+  const [l,p]=await Promise.all([api('/api/labels/'+it.image), blind?Promise.resolve({boxes:[]}):api('/api/proposals/'+it.image)]);
+  img=new Image(); img.src='/api/image/'+it.image; await img.decode(); W=img.naturalWidth; H=img.naturalHeight;
+  rec=l.image?l:{image:it.image,w:W,h:H,status:'unseen',boxes:[],rejected_proposals:[],annotator_pass:CFG.annotator_pass};
+  props=(p.boxes||[]).map((b,i)=>({...b,pid:i,state:'pending'}));
+  for(const r of rec.rejected_proposals||[]) if(props[r.pid]){ props[r.pid].state='rejected'; if(r.implicit) props[r.pid].implicit=true; }
+  for(const b of rec.boxes) if(b.src==='proposal'&&props[b.pid]) props[b.pid].state='accepted';
+  rec.covered_proposals=rec.covered_proposals||[];
+  $('ov').disabled=blind; if(blind) $('ov').checked=false; else $('ov').checked=true;
+  sel=null; hist=[]; fit(); bar();
+}
+function fit(){ s=Math.min(cv.width/W,cv.height/H); ox=(cv.width-W*s)/2; oy=(cv.height-H*s)/2; draw(); }
+const toN=(x,y)=>[(x-ox)/s,(y-oy)/s];
+
+function snapshot(){ hist.push(JSON.stringify({b:rec.boxes,r:rec.rejected_proposals,st:rec.status,p:props.map(q=>q.state)})); if(hist.length>200) hist.shift(); }
+function undo(){ const h=hist.pop(); if(!h) return; const o=JSON.parse(h); rec.boxes=o.b; rec.rejected_proposals=o.r; rec.status=o.st; o.p.forEach((st,i)=>props[i].state=st); sel=null; save(); }
+// A proposal whose centre lies inside one of the annotator's boxes sits on a labelled butt: it is 'covered', hidden,
+// and never stored as a rejection (a rejection is a hard negative).
+function covered(q){ if(q.state==='accepted') return false; const cx=q.x+q.w/2, cy=q.y+q.h/2;
+  return rec.boxes.some(b=>cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h); }
+const pend=q=>q.state==='pending'&&!covered(q);
+function rebuildRejected(){ const ent=q=>({x:q.x,y:q.y,w:q.w,h:q.h,det:q.det,filter:q.filter,pid:q.pid});
+  rec.rejected_proposals=props.filter(q=>q.state==='rejected'&&!covered(q)).map(q=>({...ent(q),...(q.implicit?{implicit:true}:{})}));
+  rec.covered_proposals=props.filter(covered).map(ent); }
+async function save(){
+  rebuildRejected(); const it=LIST[order[cur]];
+  const r=await fetch('/api/labels/'+rec.image,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});
+  if(!r.ok){ $('status').textContent='SAVE FAILED: '+(await r.text()); return; }
+  it.status=rec.status; it.n=rec.boxes.length; bar(); draw();
+}
+function bar(){
+  const it=LIST[order[cur]]; $('name').textContent=it.image;
+  $('split').innerHTML=blind?`<span class="blind">${it.split.toUpperCase()} · BLIND</span>`:'<b>TRAIN</b>';
+  $('st').textContent=rec.status+' · '+rec.boxes.length+' boxes'+(blind?'':' · '+props.filter(pend).length+' pending · '+props.filter(covered).length+' covered');
+  $('idx').textContent=(cur+1)+' / '+order.length;
+  const c=sp=>{const a=LIST.filter(x=>sp==='all'||x.split===sp); return a.filter(x=>x.status==='done').length+'/'+a.length;};
+  $('prog').textContent=`done ${c('all')} · train ${c('train')} · val ${c('val')} · test ${c('test')}`;
+}
+const hue=f=>`hsl(${210-170*f},90%,55%)`;
+function boxAt(nx,ny){ let best=null; for(const b of rec.boxes) if(nx>=b.x&&nx<=b.x+b.w&&ny>=b.y&&ny<=b.y+b.h&&(!best||b.w*b.h<best.w*best.h)) best=b; return best; }
+function propAt(nx,ny){ if(blind||!$('ov').checked) return null; let best=null;
+  for(const q of props) if(pend(q)&&nx>=q.x&&nx<=q.x+q.w&&ny>=q.y&&ny<=q.y+q.h&&(!best||q.w*q.h<best.w*best.h)) best=q; return best; }
+function handleAt(mx,my){ if(!sel||sel.kind!=='box') return null; const b=sel.b, r=7;
+  for(const [hx,hy,k] of [[b.x,b.y,'nw'],[b.x+b.w,b.y,'ne'],[b.x,b.y+b.h,'sw'],[b.x+b.w,b.y+b.h,'se']])
+    if(Math.abs(hx*s+ox-mx)<r&&Math.abs(hy*s+oy-my)<r) return k; return null; }
+
+function drawBoxes(c,tx,ty,k,lw){
+  if($('ov').checked&&!blind) for(const q of props) if(pend(q)){ c.strokeStyle=hue(q.filter); c.lineWidth=lw;
+    c.setLineDash([]); c.strokeRect(tx(q.x),ty(q.y),q.w*k,q.h*k); }
+  for(const b of rec.boxes){ const m=b.cls==='maybe'; c.fillStyle=m?'rgba(180,90,255,.18)':'rgba(255,200,0,.18)';
+    c.strokeStyle=m?'#b45aff':'#ffc800'; c.lineWidth=lw*(sel&&sel.b===b?2:1); c.setLineDash(m?[5,3]:[]);
+    c.fillRect(tx(b.x),ty(b.y),b.w*k,b.h*k); c.strokeRect(tx(b.x),ty(b.y),b.w*k,b.h*k); }
+  c.setLineDash([]);
+  if(drag&&drag.mode==='draw'){ const [x,y,w,h]=normRect(drag); c.strokeStyle='#fff'; c.lineWidth=lw; c.strokeRect(tx(x),ty(y),w*k,h*k); }
+}
+function draw(){
+  ctx.fillStyle='#111'; ctx.fillRect(0,0,cv.width,cv.height); if(!img) return;
+  ctx.imageSmoothingEnabled=s<1; ctx.drawImage(img,ox,oy,W*s,H*s);
+  drawBoxes(ctx,x=>x*s+ox,y=>y*s+oy,s,1.5);
+  if(sel&&sel.kind==='box'){ const b=sel.b; ctx.fillStyle='#fff'; for(const [hx,hy] of [[b.x,b.y],[b.x+b.w,b.y],[b.x,b.y+b.h],[b.x+b.w,b.y+b.h]]) ctx.fillRect(hx*s+ox-4,hy*s+oy-4,8,8); }
+  drawLoupes();
+}
+function drawLoupes(){
+  const box=$('loupes'); box.style.display=mouse.in?'flex':'none'; if(!mouse.in||!img) return;
+  const L=+$('lsz').value; box.style.left=mouse.x<innerWidth/2?(innerWidth-L-12)+'px':'10px';
+  const [nx,ny]=toN(mouse.x,mouse.y-38);
+  for(const {z,c,x} of loupes){ if(c.width!==L){c.width=c.height=L;} x.imageSmoothingEnabled=false; x.fillStyle='#000'; x.fillRect(0,0,L,L);
+    const sw=L/z; x.drawImage(img,nx-sw/2,ny-sw/2,sw,sw,0,0,L,L);
+    drawBoxes(x,X=>(X-nx)*z+L/2,Y=>(Y-ny)*z+L/2,z,1);
+    x.strokeStyle='rgba(0,255,255,.8)'; x.lineWidth=1; x.beginPath(); x.moveTo(L/2,0); x.lineTo(L/2,L); x.moveTo(0,L/2); x.lineTo(L,L/2); x.stroke();
+    x.fillStyle='#0ff'; x.font='12px sans-serif'; x.fillText(z+'×',5,15); }
+}
+const normRect=d=>[Math.min(d.x0,d.x1),Math.min(d.y0,d.y1),Math.abs(d.x1-d.x0),Math.abs(d.y1-d.y0)];
+const clampBox=b=>{ b.x=Math.max(0,Math.min(W-1,b.x)); b.y=Math.max(0,Math.min(H-1,b.y)); b.w=Math.min(b.w,W-b.x); b.h=Math.min(b.h,H-b.y); return b; };
+const round=b=>{ for(const k of 'xywh') b[k]=Math.round(b[k]*10)/10; return b; };
+
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{ e.preventDefault(); const f=e.deltaY<0?1.15:1/1.15, mx=e.offsetX, my=e.offsetY;
+  ox=mx-(mx-ox)*f; oy=my-(my-oy)*f; s*=f; draw(); },{passive:false});
+cv.addEventListener('mousedown',e=>{
+  const mx=e.offsetX,my=e.offsetY,[nx,ny]=toN(mx,my);
+  if(e.button===1||e.button===2){ drag={mode:'pan',mx,my,ox,oy}; return; }
+  const h=handleAt(mx,my); if(h){ snapshot(); drag={mode:'resize',h,b:sel.b,orig:{...sel.b}}; return; }
+  const b=boxAt(nx,ny); if(b){ snapshot(); sel={kind:'box',b}; drag={mode:'move',b,nx,ny,orig:{...b},moved:false}; draw(); return; }
+  const q=propAt(nx,ny); if(q){ sel={kind:'prop',q}; draw(); return; }
+  sel=null; drag={mode:'draw',x0:nx,y0:ny,x1:nx,y1:ny}; draw();
+});
+addEventListener('mousemove',e=>{
+  const r=cv.getBoundingClientRect(); mouse={x:e.clientX,y:e.clientY,in:e.clientY>r.top&&e.clientY<r.bottom};
+  const mx=e.clientX-r.left,my=e.clientY-r.top,[nx,ny]=toN(mx,my);
+  if(drag){ if(drag.mode==='pan'){ ox=drag.ox+mx-drag.mx; oy=drag.oy+my-drag.my; }
+    else if(drag.mode==='draw'){ drag.x1=Math.max(0,Math.min(W,nx)); drag.y1=Math.max(0,Math.min(H,ny)); }
+    else if(drag.mode==='move'){ drag.b.x=drag.orig.x+nx-drag.nx; drag.b.y=drag.orig.y+ny-drag.ny; drag.moved=true; clampBox(drag.b); }
+    else if(drag.mode==='resize'){ const o=drag.orig,b=drag.b; let x0=o.x,y0=o.y,x1=o.x+o.w,y1=o.y+o.h;
+      if(drag.h.includes('w')) x0=nx; if(drag.h.includes('e')) x1=nx; if(drag.h.includes('n')) y0=ny; if(drag.h.includes('s')) y1=ny;
+      b.x=Math.min(x0,x1); b.y=Math.min(y0,y1); b.w=Math.abs(x1-x0); b.h=Math.abs(y1-y0); clampBox(b); } }
+  const ub=img&&boxAt(nx,ny), uq=img&&propAt(nx,ny);
+  $('status').textContent=img?`x ${nx.toFixed(0)}  y ${ny.toFixed(0)}  zoom ${s.toFixed(2)}`+
+    (ub?`  ·  box ${ub.w.toFixed(0)}×${ub.h.toFixed(0)} px ${ub.cls}`:'')+(uq?`  ·  proposal det ${uq.det.toFixed(2)} filter ${uq.filter.toFixed(2)} ${uq.w.toFixed(0)}×${uq.h.toFixed(0)} px`:''):'';
+  draw();
+});
+addEventListener('mouseup',()=>{
+  if(!drag) return; const d=drag; drag=null;
+  if(d.mode==='draw'){ const [x,y,w,h]=normRect(d); if(w>=3&&h>=3){ snapshot(); const b=round(clampBox({x,y,w,h,cls:'butt',src:'drawn'})); rec.boxes.push(b); sel={kind:'box',b}; save(); } else draw(); }
+  else if(d.mode==='move'){ if(d.moved){ round(d.b); save(); } else hist.pop(); }
+  else if(d.mode==='resize'){ round(d.b); save(); }
+  else draw();
+});
+function target(){ const [nx,ny]=toN(mouse.x,mouse.y-38); return propAt(nx,ny)||(sel&&sel.kind==='prop'&&pend(sel.q)?sel.q:null); }
+function accept(q){ q.state='accepted'; delete q.implicit; rec.boxes.push({x:q.x,y:q.y,w:q.w,h:q.h,cls:'butt',src:'proposal',pid:q.pid}); }
+async function done(){ snapshot(); for(const q of props) if(pend(q)){ q.state='rejected'; q.implicit=true; } rec.status='done'; await save(); go(cur+1); }
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!img) return; const k=e.key;
+  if(k==='h'||k==='H'){ $('help').open=!$('help').open; return; }
+  if(k==='f'||k==='F') return fit();
+  if(k==='['||k===']'){ $('lsz').value=Math.max(100,Math.min(400,+$('lsz').value+(k===']'?20:-20))); return draw(); }
+  if(k==='ArrowRight') return go(cur+1); if(k==='ArrowLeft') return go(cur-1);
+  if(k===' '){ e.preventDefault(); return done(); }
+  if(k==='n'||k==='N'){ const j=order.findIndex((i,m)=>m>cur&&LIST[i].status==='unseen'); const j2=j>=0?j:order.findIndex(i=>LIST[i].status==='unseen'); if(j2>=0) go(j2); return; }
+  if(k==='u'||k==='U'){ snapshot(); rec.status='unseen'; for(const q of props) if(q.implicit){ q.state='pending'; delete q.implicit; } return save(); }
+  if(k==='z'||k==='Z') return undo();
+  if((k==='o'||k==='O')&&!blind){ $('ov').checked=!$('ov').checked; return draw(); }
+  if((k==='a'||k==='A')&&!blind){ const q=target(); if(q){ snapshot(); accept(q); sel=null; save(); } return; }
+  if((k==='r'||k==='R')&&!blind){ const q=target(); if(q){ snapshot(); q.state='rejected'; delete q.implicit; sel=null; save(); } return; }
+  if((k==='t'||k==='T')&&!blind){ const t=+$('thr').value, qs=props.filter(q=>pend(q)&&q.filter>=t); if(qs.length){ snapshot(); qs.forEach(accept); save(); } return; }
+  if((k==='c'||k==='C')&&sel&&sel.kind==='box'){ snapshot(); sel.b.cls=sel.b.cls==='butt'?'maybe':'butt'; return save(); }
+  if((k==='Delete'||k==='Backspace')&&sel&&sel.kind==='box'){ snapshot(); const b=sel.b; rec.boxes=rec.boxes.filter(x=>x!==b);
+    if(b.src==='proposal'&&props[b.pid]) props[b.pid].state='rejected'; sel=null; return save(); }
+});
+$('filter').onchange=()=>{ applyFilter(); go(0); }; $('ov').onchange=draw; $('lsz').onchange=draw;
+addEventListener('resize',resize); init();
+</script></body></html>
