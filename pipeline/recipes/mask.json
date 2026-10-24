@@ -159,6 +159,8 @@
       "docs/capture-protocol.md": "output/complete/capture-protocol.md",
       "docs/training-runs.md": "output/complete/training-runs.md",
       "docs/fig/eval_runs_val.png": "output/complete/fig/eval_runs_val.png",
+      "docs/cross-validation.md": "output/complete/cross-validation.md",
+      "docs/fig/cv_mask_vs_mask_hn.png": "output/complete/fig/cv_mask_vs_mask_hn.png",
       "docs/fig/web_demo_screenshot.png": "../13-web-demo/output/complete/fig/web_demo_screenshot.png",
       "web_demo": "../13-web-demo/web_demo"
     },
