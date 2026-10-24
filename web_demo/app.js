@@ -1,9 +1,15 @@
 // Browser port of the pipeline's YOLO scoring (pipeline/detectors.py YOLO + pipeline/tiling.py, fit=True):
 // 640 px square tiles at 384 px spacing, edge tiles shifted inward, per-tile NMS at IoU 0.7 (Ultralytics' default),
-// boxes mapped back to the photo and merged with NMS at IoU 0.3. Inputs are RGB / 255; a tile beyond a small
-// photo's edge is padded with grey 114, as Ultralytics' letterbox does.
+// boxes clipped to the tile, mapped back to the photo and merged with NMS at IoU 0.3. Inputs are RGB / 255; a tile
+// beyond a small photo's edge is padded with grey 114, as Ultralytics' letterbox does.
 const TILE = 640, STRIDE = 384, RAW = 0.01, NMS_TILE = 0.7, NMS_ALL = 0.3, MAX_DET = 300;
-const MODEL = 'model/yolo11s-run2.onnx';
+// Both models are YOLO11s trained on the same 87 photos. Each has its own default threshold: the one its measured
+// accuracy is stated at. The slider keeps the visitor's setting when the model is switched.
+const MODELS = {
+  hn:   { file: 'model/yolo11s-hn-f0.onnx', label: 'Hard negatives (fold 0)', thr: 0.25 },
+  run2: { file: 'model/yolo11s-run2.onnx',  label: 'Run 2',                   thr: 0.25 },
+};
+const DEFAULT_MODEL = 'hn';
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 const EXAMPLES = [
   ['20261001_134106', 'wide, shade, square tiles and manholes'],
@@ -15,7 +21,9 @@ const EXAMPLES = [
 const $ = id => document.getElementById(id);
 const CPU_NOTE = 'This browser offers no WebGPU, so detection runs on the CPU: expect about a minute per full-resolution photo. Chrome and Edge on Windows, macOS and ChromeOS run it on the GPU by default. In Chrome on Linux, turn on chrome://flags/#enable-unsafe-webgpu and chrome://flags/#enable-vulkan, restart the browser and reload this page.';
 const PARAMS = new URLSearchParams(location.search);   // ?cpu=1 skips WebGPU; ?example=STEM runs one example at load
-let session = null, backend = '', current = null;   // current = {bitmap, dets, name}
+const sessions = {};                                // model key -> InferenceSession
+let backend = '', current = null, runId = 0;         // current = {bitmap, dets, name}
+let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=run2 picks run 2
 
 function starts(n) {
   if (n <= TILE) return [0];
@@ -44,31 +52,35 @@ function nms(dets, iou) {                          // dets: [score, x0, y0, x1, 
   return keep;
 }
 
-async function loadModel() {
-  if (session) return session;
+async function loadModel(key) {
+  if (sessions[key]) return sessions[key];
+  let session = null;
   ort.env.wasm.wasmPaths = ORT_DIST;
   ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
-  status('Loading the model (38 MB, once)…');
-  const bytes = new Uint8Array(await (await fetch(MODEL)).arrayBuffer());
+  status(`Loading the model "${MODELS[key].label}" (38 MB, once)…`);
+  const bytes = new Uint8Array(await (await fetch(MODELS[key].file)).arrayBuffer());
   if (navigator.gpu && !PARAMS.has('cpu')) {
     try { session = await ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] }); backend = 'GPU (WebGPU)'; }
     catch (e) { console.warn('WebGPU unavailable, using CPU:', e); }
   }
   if (!session) {
     session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] }); backend = 'CPU (WebAssembly)';
-    $('warn').style.display = 'block'; $('warn').textContent = [CPU_NOTE, $('warn').textContent].filter(Boolean).join(' ');
+    if (!$('warn').textContent.includes(CPU_NOTE)) {
+      $('warn').style.display = 'block'; $('warn').textContent = [CPU_NOTE, $('warn').textContent].filter(Boolean).join(' ');
+    }
   }
-  return session;
+  return sessions[key] = session;
 }
 
-async function detect(bitmap) {
+async function detect(bitmap, session, id) {   // returns null when a newer run has started
   const W = bitmap.width, H = bitmap.height;
   const xs = starts(W), ys = starts(H), n = xs.length * ys.length;
   const cv = new OffscreenCanvas(TILE, TILE), cx = cv.getContext('2d', { willReadFrequently: true });
   const input = new Float32Array(3 * TILE * TILE), P = TILE * TILE;
   const all = []; let k = 0; const t0 = performance.now();
   for (const ty of ys) for (const tx of xs) {
-    k++; status(`Detecting on ${backend}: tile ${k} of ${n}…`);
+    if (id !== runId) return null;
+    k++; status(`Detecting with "${MODELS[modelKey].label}" on ${backend}: tile ${k} of ${n}…`);
     cx.fillStyle = 'rgb(114,114,114)'; cx.fillRect(0, 0, TILE, TILE);
     const tw = Math.min(TILE, W - tx), th = Math.min(TILE, H - ty);
     cx.drawImage(bitmap, tx, ty, tw, th, 0, 0, tw, th);
@@ -82,7 +94,9 @@ async function detect(bitmap) {
       const bx = d[i], by = d[A + i], bw = d[2 * A + i], bh = d[3 * A + i];
       tile.push([s, bx - bw / 2, by - bh / 2, bx + bw / 2, by + bh / 2]);
     }
-    for (const b of nms(tile, NMS_TILE).slice(0, MAX_DET)) all.push([b[0], b[1] + tx, b[2] + ty, b[3] + tx, b[4] + ty]);
+    const cl = (v, hi) => Math.min(Math.max(v, 0), hi);   // Ultralytics clips each box to the tile
+    for (const b of nms(tile, NMS_TILE).slice(0, MAX_DET))
+      all.push([b[0], cl(b[1], tw) + tx, cl(b[2], th) + ty, cl(b[3], tw) + tx, cl(b[4], th) + ty]);
     await new Promise(r => setTimeout(r));          // let the page repaint the progress line
   }
   return { dets: nms(all, NMS_ALL), ms: performance.now() - t0, tiles: n };
@@ -122,15 +136,20 @@ function warnFor(bitmap) {
 }
 
 async function run(bitmap, name) {
+  const id = ++runId, key = modelKey;
   current = { bitmap, dets: null, name }; warnFor(bitmap); draw();
   try {
-    await loadModel();
-    const r = await detect(bitmap);
+    const session = await loadModel(key);
+    if (id !== runId) return;
+    const r = await detect(bitmap, session, id);
+    if (!r) return;
     current.dets = r.dets; draw();
-    status(`${name}: ${current.shown} detections at threshold ${(+$('thr').value).toFixed(2)} · ${r.tiles} tiles in ${(r.ms / 1000).toFixed(1)} s on ${backend}.`);
-    window.lastResult = { name, backend, ms: r.ms, tiles: r.tiles, dets: r.dets };   // read by the page test
-  } catch (e) { console.error(e); status('Detection failed: ' + e.message); }
+    status(`${name}: ${current.shown} detections at threshold ${(+$('thr').value).toFixed(2)} with "${MODELS[key].label}" · ${r.tiles} tiles in ${(r.ms / 1000).toFixed(1)} s on ${backend}.`);
+    window.lastResult = { name, model: key, backend, ms: r.ms, tiles: r.tiles, dets: r.dets };   // read by the page test
+  } catch (e) { console.error(e); if (id === runId) status('Detection failed: ' + e.message); }
 }
+
+function setThr(v) { $('thr').value = v; $('thrv').textContent = (+v).toFixed(2); }
 
 async function runExample(stem) {
   status('Loading the example photo…');
@@ -151,6 +170,14 @@ $('file').onchange = async e => {
 };
 $('thr').oninput = () => {
   $('thrv').textContent = (+$('thr').value).toFixed(2); draw();
-  if (current && current.dets) status(`${current.name}: ${current.shown} detections at threshold ${(+$('thr').value).toFixed(2)} on ${backend}.`);
+  if (current && current.dets) status(`${current.name}: ${current.shown} detections at threshold ${(+$('thr').value).toFixed(2)} with "${MODELS[modelKey].label}" on ${backend}.`);
+};
+for (const [key, m] of Object.entries(MODELS)) {
+  const o = document.createElement('option'); o.value = key; o.textContent = m.label; $('model').appendChild(o);
+}
+$('model').value = modelKey; setThr(MODELS[modelKey].thr);
+$('model').onchange = () => {
+  modelKey = $('model').value;
+  if (current) run(current.bitmap, current.name);   // switching re-runs detection on the current photo
 };
 if (PARAMS.get('example')) runExample(PARAMS.get('example'));
