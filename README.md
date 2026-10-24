@@ -129,6 +129,8 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 
 ## Web demo
 
+Live: https://lorinc.github.io/litter-detection-pipeline/web_demo/
+
 `web_demo/` runs the trained YOLO11s (run 2) in the browser with ONNX Runtime Web: on the GPU through WebGPU
 where the browser offers it, otherwise on the CPU. Four validation photos run on a click, and visitors can try their
 own photos, which are processed locally and never uploaded. An info panel states the photo the model is made for
