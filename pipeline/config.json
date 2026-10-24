@@ -137,7 +137,7 @@
     "model": "yolo11s.pt",
     "ultralytics": "8.4.184",
     "args": {
-      "cache": "ram"
+      "cache": "disk"
     }
   },
   "run": {
