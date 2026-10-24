@@ -163,10 +163,12 @@ Live: <a href="https://lorinc.github.io/litter-detection-pipeline/web_demo/" tar
 
 <a href="https://lorinc.github.io/litter-detection-pipeline/web_demo/" target="_blank"><img src="docs/fig/web_demo_screenshot.png" alt="The web demo: four example photos, a threshold slider, and a validation photo with three detected butts boxed in red" width="865"></a>
 
-`web_demo/` runs the trained YOLO11s (run 2) in the browser with ONNX Runtime Web: on the GPU through WebGPU
-where the browser offers it, otherwise on the CPU. Four validation photos run on a click, and visitors can try their
+`web_demo/` runs a trained YOLO11s in the browser with ONNX Runtime Web: on the GPU through WebGPU where the
+browser offers it, otherwise on the CPU. A selector offers two models: the hard-negative recipe's fold 0 model from
+the cross-validation (default) and run 2, for comparison. Four validation photos run on a click, and visitors can try their
 own photos, which are processed locally and never uploaded. An info panel states the photo the model is made for
-(low camera height, full resolution, landscape, daylight, dry city pavement) and that deviations lower accuracy.
+(low camera height, full resolution, landscape, daylight, dry city pavement), that deviations lower accuracy, and
+both models' measured accuracy.
 The browser code ports the harness's tiling and merging exactly; the check is in `web_demo/README.md`. To run it
 locally: `cd web_demo && python3 -m http.server 8765`, then open http://127.0.0.1:8765/.
 
