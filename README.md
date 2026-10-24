@@ -8,10 +8,13 @@ protocol. The full image set and its labels are a public Kaggle dataset (see Dat
 
 ## Results so far
 
-All numbers come from one dataset: the validation split of one capture session (19 photos of 4000×1800 px,
-46 labelled butts), scored on whole photos by the evaluation harness. Bracketed ranges are 95% intervals.
-The full write-up, with the recall-vs-false-positive curve, size and shot-type tables and known gaps, is
-[`docs/training-runs.md`](docs/training-runs.md).
+Readable on a phone: [cross-validation results](https://lorinc.github.io/litter-detection-pipeline/docs/cross-validation.html)
+and [first trained detectors against OWLv2](https://lorinc.github.io/litter-detection-pipeline/docs/training-runs.html).
+
+All numbers come from one capture session (4000×1800 px phone photos), scored on whole photos by the evaluation
+harness. Bracketed ranges are 95% intervals. The tables below use the validation split (19 photos, 46 labelled
+butts, labelled without detector suggestions); the full write-up, with the recall-vs-false-positive curve, size
+and shot-type tables and known gaps, is [`docs/training-runs.md`](docs/training-runs.md).
 
 **Accuracy at each model's operating threshold**
 
@@ -50,7 +53,33 @@ from each model's curve; a fairer comparison than fixed thresholds)
 - The T4 figures are estimates: YOLO11s from Ultralytics' own timing on a Kaggle T4 (12–15 ms per tile for the
   trained models, × 50 tiles), OWLv2 and YOLO11n scaled from it by compute. Small models use a GPU less
   efficiently, hence the wide YOLO11n range. No accuracy is projected for YOLO11n.
-- Training YOLO11s for 100 epochs takes 22–24 minutes on one T4.
+- Training YOLO11s for 100 epochs takes 22–24 minutes on one T4 with validation after every epoch, 11–14
+  minutes without it (two runs sharing the machine).
+
+**Cross-validation: hard-negative tiles** ([`docs/cross-validation.md`](docs/cross-validation.md))
+
+Run 2's recipe (`mask`) against the same plus hard-negative tiles (`mask_hn`: one training tile centred on each
+rejected zero-shot proposal). 5 folds over the 106 training and validation photos: fold 0 is the validation split,
+folds 1–4 cut the training photos by time group, and their labels were made with zero-shot proposals on screen, so
+pooled scores compare the two recipes with each other, not with OWLv2. Each recipe is trained once per fold and
+scored on the fold it did not see (final-epoch checkpoint, threshold 0.25); pooled over all 106 photos (259 butts).
+A difference counts as real when its 95% interval from a paired bootstrap over the same photos excludes zero.
+
+| | Recall | False positives per photo |
+|---|---|---|
+| `mask` (run 2's recipe) | 86.1% (81.4–89.8%) | 1.91 (1.52–2.32) |
+| `mask_hn` (+ hard-negative tiles) | 83.8% (78.8–87.8%) | 1.31 (1.01–1.63) |
+| Difference | −2.3 points (−5.5 to +1.5), inside noise | −0.60 (−1.01 to −0.23), real |
+
+<img src="docs/fig/cv_mask_vs_mask_hn.png" alt="Pooled recall against false positives per photo for mask and mask_hn" width="700">
+
+- At threshold 0.25, hard-negative tiles cut false positives by about a third, lower in every fold, with the recall
+  change inside noise.
+- At equal recall (read from the pooled curves, no interval) the two are about the same between 75% and 86%
+  recall: most of the cut comes from the hard-negative models scoring lower overall. `mask_hn` is ahead at 88–90%
+  recall (2.3–2.6 against 3.2–4.7 false positives per photo).
+- The switch adds both harder and many more butt-free tiles, so a gain would not say which caused it; a pair that
+  changes only the share of empty tiles is next.
 
 ## The pipeline is parametric
 
@@ -109,6 +138,7 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 - `annotation_tool/LABELING_POLICY.md`: the rule the annotation followed, and what it means for the labels.
 - `annotation_tool/example/`: four example photos (landscape, JPEG, no metadata) with their own config; three are training photos with zero-shot proposals, one is a validation photo shown in blind mode. They vary in light (shade, sun, mixed), surface and shot type.
 - `docs/training-runs.md`: the first trained detectors against the OWLv2 baseline.
+- `docs/cross-validation.md`: 5-fold cross-validation of run 2's recipe against the same plus hard-negative tiles.
 - `web_demo/`: a static page that runs the trained detector in the browser (see Web demo).
 - `docs/capture-protocol.md`: how to shoot the next photo set, and which weakness of the current one each rule removes.
 
