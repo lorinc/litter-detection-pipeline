@@ -1,4 +1,5 @@
-"""Stage the dataset and upload it to Kaggle as a private dataset (a new version if it already exists).
+"""Stage the dataset and upload it to Kaggle (a new version of the existing dataset, whose visibility it keeps; a new
+dataset starts private).
 usage: upload_kaggle.py [--config PATH] [--notes TEXT] [--dry-run]
 Credentials: KAGGLE_API_TOKEN in the environment (source the private credentials file first).
 Staged under <data_dir>/<kaggle.stage_dir> (images hard-linked, not copied): images/<stem>.png, labels/<stem>.json,

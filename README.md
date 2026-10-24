@@ -4,7 +4,7 @@ A pipeline for detecting small objects in high-resolution ground photos: annotat
 train an Ultralytics detector on Kaggle, and score any detector on whole frames with one evaluation harness.
 It was built on cigarette butts on city pavement, photographed with a phone at about robot camera height.
 This repository holds the code, the annotation tool with four example photos, the labelling policy and a capture
-protocol. The full image set and its labels are not included (see Data).
+protocol. The full image set and its labels are a public Kaggle dataset (see Data).
 
 ## Results so far
 
@@ -121,7 +121,7 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 | `train.py` | Ultralytics training on an export |
 | `tiling.py`, `metrics.py`, `detectors.py`, `evaluate.py` | Evaluation harness: tiling, matching, detector adapters, full-frame scoring |
 | `run.py`, `publish.py` | Sync code, train one or more runs on Kaggle (one GPU each), download, evaluate |
-| `upload_kaggle.py` | Upload the image copies and labels as a private Kaggle dataset |
+| `upload_kaggle.py` | Upload the image copies and labels as a Kaggle dataset (a new version if it exists) |
 
 ## Trying the annotation tool
 
@@ -129,7 +129,7 @@ From `pipeline/`: `python annotate.py --config ../annotation_tool/example/config
 
 ## Data
 
-The complete dataset (125 street photos from one capture session, privacy-blurred and stripped of metadata, with hand-drawn labels and a frozen train / val / test split) is uploaded to Kaggle as a private dataset, which the training runs mount.
+The complete dataset (125 street photos from one capture session, privacy-blurred and stripped of metadata, with hand-drawn labels and a frozen train / val / test split) is public on Kaggle as "Cigarette Litter Street Photo Dataset": https://www.kaggle.com/datasets/lorinc/butt-field-2026-10-01. Training runs mount it by its handle, `lorinc/butt-field-2026-10-01`.
 
 ## Running
 
