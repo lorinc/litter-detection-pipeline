@@ -1,0 +1,173 @@
+{
+  "dataset": "field-2026-10-01",
+  "source_glob": "../04-detection-demo-v0/images/local_photos/2026*.jpg",
+  "data_dir": "data",
+  "exclude": [
+    "20261001_134345"
+  ],
+  "split": {
+    "min_gap_s": 14,
+    "fractions": {
+      "val": 0.15,
+      "test": 0.15
+    },
+    "tolerance": 0.03,
+    "seed": 12,
+    "tries": 20000,
+    "require": {
+      "light": {
+        "sun": 3,
+        "shade": 3
+      },
+      "shot_type": {
+        "wide": 3,
+        "closeup": 2,
+        "high": 1
+      }
+    }
+  },
+  "cv": {
+    "folds": 5,
+    "seed": 12,
+    "tries": 20000,
+    "tolerance": 0.03,
+    "require": {},
+    "fold": null
+  },
+  "detector": {
+    "model": "google/owlv2-base-patch16-ensemble",
+    "prompts": [
+      "a cigarette butt",
+      "a cigarette filter on the ground"
+    ],
+    "tile": 960,
+    "stride": 720,
+    "raw_threshold": 0.05,
+    "keep_threshold": 0.1,
+    "nms_iou": 0.3,
+    "threads": 8
+  },
+  "box_filter": {
+    "backbone": "facebook/dinov2-small",
+    "crop_min_half": 80,
+    "crop_scale": 1.6,
+    "C": 1.0,
+    "train_labels": "../04-detection-demo-v0/labels",
+    "train_boxes": "../04-detection-demo-v0/review"
+  },
+  "annotate": {
+    "host": "127.0.0.1",
+    "port": 8712,
+    "annotator_pass": 1,
+    "loupe_px": 220,
+    "loupe_zooms": [
+      2,
+      6,
+      12
+    ],
+    "accept_all_default": 0.5
+  },
+  "downscale": {
+    "factors": [
+      1,
+      1.5,
+      2,
+      3,
+      4
+    ],
+    "resample": "box",
+    "splits": [
+      "val"
+    ],
+    "recall_threshold": 0.1,
+    "sensitivity_threshold": 0.05,
+    "match_iou": 0.3,
+    "bins": [
+      0,
+      10,
+      15,
+      20,
+      30,
+      45,
+      60,
+      90,
+      120,
+      100000
+    ],
+    "floor_recall": 0.9
+  },
+  "kaggle": {
+    "handle": "lorinc/butt-field-2026-10-01",
+    "stage_dir": "kaggle_upload"
+  },
+  "eval": {
+    "split": "val",
+    "match_iou": 0.3,
+    "bins": [
+      0,
+      10,
+      15,
+      20,
+      30,
+      45,
+      60,
+      90,
+      120,
+      100000
+    ],
+    "bootstrap": 1000,
+    "seed": 0,
+    "detectors": {
+      "owlv2": {
+        "adapter": "owlv2",
+        "threshold": 0.1
+      }
+    }
+  },
+  "export": {
+    "out_dir": "export",
+    "downscale": 1,
+    "tile": 640,
+    "stride": 384,
+    "min_visible": 0.8,
+    "maybe": "mask",
+    "mask_fill": [
+      114,
+      114,
+      114
+    ],
+    "background_share": 0.1,
+    "hard_negatives": false,
+    "seed": 0,
+    "workers": 0,
+    "png_compress": 1
+  },
+  "train": {
+    "model": "yolo11s.pt",
+    "ultralytics": "8.4.184",
+    "args": {
+      "cache": "disk",
+      "val": false
+    }
+  },
+  "run": {
+    "kaggle_dataset": "lorinc/butt-field-2026-10-01",
+    "kaggle_user": "lorinc",
+    "public_repo": "https://github.com/lorinc/litter-detection-pipeline.git",
+    "public_clone": "../../../litter-detection-pipeline",
+    "publish_docs": {
+      "docs/capture-protocol.md": "output/complete/capture-protocol.md",
+      "docs/training-runs.md": "output/complete/training-runs.md",
+      "docs/fig/eval_runs_val.png": "output/complete/fig/eval_runs_val.png",
+      "docs/fig/web_demo_screenshot.png": "../13-web-demo/output/complete/fig/web_demo_screenshot.png",
+      "web_demo": "../13-web-demo/web_demo"
+    },
+    "eval": {
+      "adapter": "yolo",
+      "threshold": 0.25,
+      "raw_threshold": 0.01,
+      "nms_iou": 0.3,
+      "threads": 8
+    }
+  }
+}

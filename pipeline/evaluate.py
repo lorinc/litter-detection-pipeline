@@ -38,21 +38,8 @@ for s in imgs:
                'settings':det.settings},open(o,'w'))
     print(f'{s}: {len(hits)} boxes, {ms/1000:.0f} s',flush=True)
 # scoring
-frames=[]  # per frame: butts [(size, best score of a hitting detection or -1)], dets [(score, kind)], kind: butt|maybe|fp
-for s in imgs:
-    c=json.load(open(cache/f'{s}.json')); lab=json.load(open(data/'labels'/f'{s}.json'))
-    gt=[((b['x'],b['y'],b['x']+b['w'],b['y']+b['h']),b['cls']) for b in lab['boxes']]
-    dets=[(h[0],h[1:]) for h in c['hits']]
-    butts=[(max(g[2]-g[0],g[3]-g[1]),max([sc for sc,d in dets if metrics.hit(d,g,E['match_iou'])],default=-1)) for g,k in gt if k=='butt']
-    kinds=[(sc,'butt' if any(k=='butt' and metrics.hit(d,g,E['match_iou']) for g,k in gt) else
-                'maybe' if any(metrics.hit(d,g,E['match_iou']) for g,k in gt) else 'fp') for sc,d in dets]
-    frames.append({'image':s,'shot':meta[s]['shot_type'],'size':c['size'],'ms':c['ms'],'butts':butts,'dets':kinds})
-def at(fr,t):
-    n=sum(len(f['butts']) for f in fr); k=sum(sc>=t for f in fr for _,sc in f['butts'])
-    fp=sum(sc>=t and kd=='fp' for f in fr for sc,kd in f['dets']); tp=sum(sc>=t and kd=='butt' for f in fr for sc,kd in f['dets'])
-    nb=sum(sc>=t for f in fr for sc,_ in f['dets'])
-    return {'frames':len(fr),'butts':n,'found':k,'recall':round(k/n,3) if n else None,'recall_ci95':metrics.wilson(k,n),
-            'fp_per_frame':round(fp/len(fr),2),'boxes_per_frame':round(nb/len(fr),2),'precision':round(tp/(tp+fp),3) if tp+fp else None}
+frames=[metrics.frame(json.load(open(cache/f'{s}.json')),json.load(open(data/'labels'/f'{s}.json')),meta[s]['shot_type'],E['match_iou']) for s in imgs]
+at=metrics.at
 rng=np.random.default_rng(E['seed'])
 boot=[at([frames[i] for i in rng.integers(0,len(frames),len(frames))],thr)['fp_per_frame'] for _ in range(E['bootstrap'])]
 op=at(frames,thr); op['fp_per_frame_ci95']=[round(float(np.percentile(boot,2.5)),2),round(float(np.percentile(boot,97.5)),2)]
