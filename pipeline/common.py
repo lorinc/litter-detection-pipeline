@@ -3,8 +3,8 @@ config are relative to the initiative directory. Photos listed in the config's "
 split by load_split, so no script sees them; their label and split entries stay on disk (reversible)."""
 import json,sys,pathlib
 HERE=pathlib.Path(__file__).resolve().parents[1]
-def load_config():
-    p=pathlib.Path(sys.argv[sys.argv.index('--config')+1]) if '--config' in sys.argv else HERE/'pipeline/config.json'
+def load_config(p=None):
+    p=p or (pathlib.Path(sys.argv[sys.argv.index('--config')+1]) if '--config' in sys.argv else HERE/'pipeline/config.json')
     cfg=json.load(open(p)); cfg['_data']=HERE/cfg['data_dir']; return cfg
 def load_split(cfg):
     """{stem: 'train'|'val'|'test'} from <data_dir>/split.json, without the config's excluded photos."""

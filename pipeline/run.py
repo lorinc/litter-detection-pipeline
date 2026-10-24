@@ -1,50 +1,89 @@
-"""One command per run: publish the pipeline, export and train on Kaggle, download, evaluate locally.
-usage: run.py NAME [--config PATH]      resumable: each step is skipped when its output already exists
+"""One command per batch of runs: publish the pipeline, export and train on Kaggle (one GPU per run, in parallel),
+download, evaluate locally.
+usage: run.py NAME[=CONFIG] [NAME[=CONFIG] ...]     a bare NAME uses pipeline/config.json
+resumable: each step is skipped when its output already exists. The runs of one call share one Kaggle kernel,
+butt-train-NAME1-NAME2..., on a machine with at least as many GPUs as runs (Kaggle's T4 machine has 2).
 Run directory runs/NAME/ (initiative directory): config.json (the config the run used, with its eval entry),
-meta.json (private and public commit, label hash, Kaggle kernel), kernel/ (the script pushed to Kaggle),
-kaggle/ (downloaded training output: weights, results.csv, plots, log), NAME_val.json and eval_NAME_val.png
-(harness result). The Kaggle kernel clones the public repo at the published commit, installs the pinned
-Ultralytics, runs export.py on the Kaggle dataset and train.py, and keeps only the training output.
+meta.json (private and public commit, label hash, Kaggle kernel, GPU), kernel/ (the script pushed to Kaggle),
+kaggle/ (downloaded training output: weights, results.csv, plots, train.log, kernel log), NAME_val.json and
+eval_NAME_val.png (harness result). The kernel clones the public repo at the published commit, installs the pinned
+Ultralytics, runs export.py on the Kaggle dataset for each run in turn, then train.py for all runs at once, each
+seeing only its own GPU, and keeps only the training output.
 Needs KAGGLE_API_TOKEN in the environment.
 """
-import json,sys,time,shutil,subprocess,hashlib,pathlib
+import json,sys,time,shutil,subprocess,hashlib,pathlib,tempfile
 from common import HERE,load_config,load_split
 import publish
-cfg=load_config(); R=cfg['run']; name=sys.argv[1]
-rd=HERE/'runs'/name; rd.mkdir(parents=True,exist_ok=True); kid=f"{R['kaggle_user']}/butt-train-{name}".lower().replace('_','-')
+runs={}
+for a in sys.argv[1:]:
+    n,_,p=a.partition('='); runs[n]=load_config(pathlib.Path(p).resolve() if p else None)
+assert runs,'usage: run.py NAME[=CONFIG] [NAME[=CONFIG] ...]'
+names=list(runs); R=runs[names[0]]['run']; tag='+'.join(names)
+rds={n:HERE/'runs'/n for n in names}; kid=f"{R['kaggle_user']}/butt-train-{'-'.join(names)}".lower().replace('_','-')
 kg=lambda *a,check=True:subprocess.run([str(pathlib.Path(sys.executable).parent/'kaggle'),*a],capture_output=True,text=True,check=check).stdout
-def step(msg): print(f'[{name}] {msg}',flush=True)
-if not (rd/'meta.json').exists():
-    pub=publish.publish(); split=load_split(cfg); lh=hashlib.sha256()
-    for s in sorted(split): lh.update(s.encode()+open(cfg['_data']/'labels'/f'{s}.json','rb').read())
-    rc={k:v for k,v in cfg.items() if not k.startswith('_')}
-    rc.setdefault('eval',{}).setdefault('detectors',{})[name]={**R['eval'],'weights':f'runs/{name}/kaggle/train/weights/best.pt',
-        'tile':cfg['export']['tile'],'stride':cfg['export']['stride'],'imgsz':cfg['export']['tile']}
-    json.dump(rc,open(rd/'config.json','w'),indent=2)
-    kd=rd/'kernel'; kd.mkdir(exist_ok=True)
-    open(kd/'run.py','w').write(f'''import subprocess,glob,json,os,shutil
+def step(msg): print(f'[{tag}] {msg}',flush=True)
+pushed=[n for n in names if (rds[n]/'meta.json').exists()]
+assert not pushed or len(pushed)==len(names),f'runs {pushed} were pushed before; run them alone or delete their directories'
+if not pushed:
+    pub=publish.publish(); rcs={}
+    for n,cfg in runs.items():
+        split=load_split(cfg); lh=hashlib.sha256()
+        for s in sorted(split): lh.update(s.encode()+open(cfg['_data']/'labels'/f'{s}.json','rb').read())
+        rc={k:v for k,v in cfg.items() if not k.startswith('_')}
+        rc.setdefault('eval',{}).setdefault('detectors',{})[n]={**cfg['run']['eval'],'weights':f'runs/{n}/kaggle/train/weights/best.pt',
+            'tile':cfg['export']['tile'],'stride':cfg['export']['stride'],'imgsz':cfg['export']['tile']}
+        rds[n].mkdir(parents=True,exist_ok=True); json.dump(rc,open(rds[n]/'config.json','w'),indent=2); rcs[n]=(rc,lh.hexdigest())
+    models=sorted({rc['train']['model'] for rc,_ in rcs.values()}|{'yolo11n.pt'}); ver={rc['train']['ultralytics'] for rc,_ in rcs.values()}
+    assert len(ver)==1,f'runs of one batch need the same Ultralytics version, got {ver}'
+    kd=pathlib.Path(tempfile.mkdtemp())/'kernel'; kd.mkdir()
+    open(kd/'run.py','w').write(f'''import subprocess,glob,json,os,shutil,sys
 sh=lambda c:subprocess.run(c,shell=True,check=True)
+runs=json.loads({json.dumps({n:rc for n,(rc,_) in rcs.items()})!r})
+gpus=subprocess.run("nvidia-smi -L",shell=True,capture_output=True,text=True).stdout.splitlines()
+assert len(gpus)>=len(runs),f"{{len(runs)}} runs need as many GPUs, found {{len(gpus)}}"
 sh("git clone {R['public_repo']} /tmp/code && git -C /tmp/code checkout {pub}")
-sh("pip install -q ultralytics=={cfg['train']['ultralytics']}")
+sh("pip install -q ultralytics=={ver.pop()}")
+# fetch shared downloads (weights, the AMP check's yolo11n.pt, the plot font) once, so parallel runs do not race
+sh("""cd /tmp/code/pipeline && python -c "from ultralytics import YOLO; from ultralytics.utils.checks import check_font; [YOLO(m) for m in {models}]; check_font('Arial.ttf')" """)
 data=os.path.dirname(glob.glob('/kaggle/input/**/split.json',recursive=True)[0])
-open('/tmp/config.json','w').write({json.dumps(rc)!r})
-sh(f"cd /tmp/code/pipeline && python export.py --config /tmp/config.json --data {{data}} --out /tmp/export")
-sh("cd /tmp/code/pipeline && python train.py --config /tmp/config.json --data /tmp/export --project /kaggle/working")
-shutil.copy('/tmp/export/export.json','/kaggle/working/export.json')
+for n,rc in runs.items():
+    open(f'/tmp/{{n}}.json','w').write(json.dumps(rc)); os.makedirs(f'/kaggle/working/{{n}}',exist_ok=True)
+    sh(f"cd /tmp/code/pipeline && python export.py --config /tmp/{{n}}.json --data {{data}} --out /tmp/export_{{n}}")
+    shutil.copy(f'/tmp/export_{{n}}/export.json',f'/kaggle/working/{{n}}/export.json')
+procs={{n:subprocess.Popen(f"cd /tmp/code/pipeline && exec python train.py --config /tmp/{{n}}.json --data /tmp/export_{{n}} --project /kaggle/working/{{n}}",
+    shell=True,env={{**os.environ,'CUDA_VISIBLE_DEVICES':str(i)}},stdout=open(f'/kaggle/working/{{n}}/train.log','w'),stderr=subprocess.STDOUT)
+    for i,n in enumerate(runs)}}
+codes={{n:p.wait() for n,p in procs.items()}}
+for n in runs: print(f"===== {{n}}: exit {{codes[n]}}"); print(''.join(open(f'/kaggle/working/{{n}}/train.log').readlines()[-30:]))
+sys.exit(1 if any(codes.values()) else 0)
 ''')
-    json.dump({'id':kid,'title':f'butt-train-{name}','code_file':'run.py','language':'python','kernel_type':'script',
-               'is_private':True,'enable_gpu':True,'enable_internet':True,'dataset_sources':[R['kaggle_dataset']]},open(kd/'kernel-metadata.json','w'),indent=1)
+    json.dump({'id':kid,'title':kid.split('/')[1],'code_file':'run.py','language':'python','kernel_type':'script',
+               'is_private':True,'enable_gpu':True,'enable_internet':True,'machine_shape':'NvidiaTeslaT4',
+               'dataset_sources':[R['kaggle_dataset']]},open(kd/'kernel-metadata.json','w'),indent=1)
     step('pushing kernel '+kid); print(kg('kernels','push','-p',str(kd)))
-    json.dump({'run':name,'private_commit':publish.git('rev-parse','HEAD'),'public_repo':R['public_repo'],'public_commit':pub,
-               'labels_sha256':lh.hexdigest(),'kernel':kid,'pushed':time.strftime('%Y-%m-%d %H:%M:%S')},open(rd/'meta.json','w'),indent=1)
-if not (rd/'kaggle'/'train'/'weights'/'best.pt').exists():
+    for i,n in enumerate(names):
+        shutil.copytree(kd,rds[n]/'kernel',dirs_exist_ok=True)
+        json.dump({'run':n,'batch':names,'gpu':i,'private_commit':publish.git('rev-parse','HEAD'),'public_repo':R['public_repo'],
+                   'public_commit':pub,'labels_sha256':rcs[n][1],'kernel':kid,'pushed':time.strftime('%Y-%m-%d %H:%M:%S')},
+                  open(rds[n]/'meta.json','w'),indent=1)
+    shutil.rmtree(kd.parent)
+best=lambda n:rds[n]/'kaggle'/'train'/'weights'/'best.pt'
+failed=False
+if not all(best(n).exists() for n in names):
     while True:
         st=kg('kernels','status',kid,check=False).strip(); step(st)
         if 'COMPLETE' in st.upper(): break
-        if 'ERROR' in st.upper() or 'CANCEL' in st.upper():
-            kg('kernels','output',kid,'-p',str(rd/'kaggle'),check=False); sys.exit(f'kernel failed; log in {rd/"kaggle"}')
+        if 'ERROR' in st.upper() or 'CANCEL' in st.upper(): failed=True; break
         time.sleep(120)
-    step('downloading output'); kg('kernels','output',kid,'-p',str(rd/'kaggle'))
-if not (rd/f'{name}_val.json').exists():
-    step('evaluating'); subprocess.run([sys.executable,str(HERE/'pipeline/evaluate.py'),name,'--config',str(rd/'config.json'),'--out',str(rd)],check=True)
-step('done: '+str(rd/f'{name}_val.json'))
+    step('downloading output'); dl=pathlib.Path(tempfile.mkdtemp()); kg('kernels','output',kid,'-p',str(dl),check=False)
+    for n in names:
+        kd=rds[n]/'kaggle'; kd.mkdir(exist_ok=True)
+        if (dl/n).exists(): shutil.copytree(dl/n,kd,dirs_exist_ok=True)
+        for f in dl.glob('*.log'): shutil.copy(f,kd)
+    shutil.rmtree(dl)
+for n in names:
+    if not best(n).exists(): step(f'{n}: no weights; log in {rds[n]/"kaggle"}'); failed=True; continue
+    if not (rds[n]/f'{n}_val.json').exists():
+        step(f'evaluating {n}'); subprocess.run([sys.executable,str(HERE/'pipeline/evaluate.py'),n,'--config',str(rds[n]/'config.json'),'--out',str(rds[n])],check=True)
+    step('done: '+str(rds[n]/f'{n}_val.json'))
+if failed: sys.exit(f'kernel {kid} failed or a run has no weights')
