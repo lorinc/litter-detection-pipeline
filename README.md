@@ -10,6 +10,8 @@ protocol. The full image set and its labels are a public Kaggle dataset (see Dat
 
 All numbers come from one dataset: the validation split of one capture session (19 photos of 4000×1800 px,
 46 labelled butts), scored on whole photos by the evaluation harness. Bracketed ranges are 95% intervals.
+The full write-up, with the recall-vs-false-positive curve, size and shot-type tables and known gaps, is
+[`docs/training-runs.md`](docs/training-runs.md).
 
 **Accuracy at each model's operating threshold**
 
@@ -32,9 +34,9 @@ from each model's curve; a fairer comparison than fixed thresholds)
 
 | Model | Parameters | Compute | Laptop CPU (i5-1145G7), measured | NVIDIA T4 GPU, estimated |
 |---|---|---|---|---|
-| OWLv2 (baseline) | 155 M | 11,488 GFLOPs | 119 s | about 5 s (within a factor of 2) |
-| YOLO11s (current) | 9.4 M | 1,071 GFLOPs | 4.7–5.2 s | about 0.5–0.8 s |
-| YOLO11n (projected, not trained yet) | 2.6 M | about 330 GFLOPs | not measured | about 0.15–0.5 s |
+| OWLv2 (baseline) | 155 M | 11,488 GFLOPs | 119 s | about 6 s (within a factor of 2) |
+| YOLO11s (current) | 9.4 M | 1,071 GFLOPs | 4.7–5.2 s | about 0.6–0.7 s |
+| YOLO11n (projected, not trained yet) | 2.6 M | about 330 GFLOPs | not measured | about 0.2–0.5 s |
 
 **Reading:**
 
@@ -45,8 +47,8 @@ from each model's curve; a fairer comparison than fixed thresholds)
 - Run 1 against run 2 (how uncertain boxes are treated in training) is inconclusive: their intervals overlap.
 - The validation photos come from the same session as the training photos (same streets, light and phone), which
   flatters a trained model against a zero-shot one. A photo session at new locations is the real test.
-- The T4 figures are estimates: YOLO11s from Ultralytics' own timing of a one-epoch model on a Kaggle T4
-  (9.8–15.8 ms per tile × 50 tiles), OWLv2 and YOLO11n scaled from it by compute. Small models use a GPU less
+- The T4 figures are estimates: YOLO11s from Ultralytics' own timing on a Kaggle T4 (12–15 ms per tile for the
+  trained models, × 50 tiles), OWLv2 and YOLO11n scaled from it by compute. Small models use a GPU less
   efficiently, hence the wide YOLO11n range. No accuracy is projected for YOLO11n.
 - Training YOLO11s for 100 epochs takes 22–24 minutes on one T4.
 
@@ -106,6 +108,7 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 - `annotation_tool/index.html`: the browser page of the annotation tool, served by `pipeline/annotate.py`.
 - `annotation_tool/LABELING_POLICY.md`: the rule the annotation followed, and what it means for the labels.
 - `annotation_tool/example/`: four example photos (landscape, JPEG, no metadata) with their own config; three are training photos with zero-shot proposals, one is a validation photo shown in blind mode. They vary in light (shade, sun, mixed), surface and shot type.
+- `docs/training-runs.md`: the first trained detectors against the OWLv2 baseline.
 - `docs/capture-protocol.md`: how to shoot the next photo set, and which weakness of the current one each rule removes.
 
 | Script | What it does |
@@ -129,7 +132,8 @@ From `pipeline/`: `python annotate.py --config ../annotation_tool/example/config
 
 ## Data
 
-The complete dataset (125 street photos from one capture session, privacy-blurred and stripped of metadata, with hand-drawn labels and a frozen train / val / test split) is public on Kaggle as "Cigarette Litter Street Photo Dataset": https://www.kaggle.com/datasets/lorinc/butt-field-2026-10-01. Training runs mount it by its handle, `lorinc/butt-field-2026-10-01`.
+The complete dataset (125 street photos from one capture session in Valencia, Spain, on 2026-10-01, privacy-blurred and stripped of metadata, with hand-drawn labels and a frozen train / val / test split) is public on Kaggle as "Cigarette Litter Street Photo Dataset": https://www.kaggle.com/datasets/lorinc/butt-field-2026-10-01. Training runs mount it by its handle, `lorinc/butt-field-2026-10-01`. The dataset, including the example photos in
+`annotation_tool/example/`, is licensed CC BY 4.0; the code is licensed AGPL-3.0.
 
 ## Running
 
@@ -139,4 +143,4 @@ numpy, scikit-learn, matplotlib, kaggle, kagglehub.
 
 ## Licence
 
-AGPL-3.0 (see `LICENSE`).
+Code: AGPL-3.0 (see `LICENSE`). Photos and labels: CC BY 4.0 (see Data).

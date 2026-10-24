@@ -20,7 +20,7 @@ shutil.copy(cp,stage/'config.json')
 n={v:sum(1 for x in split.values() if x==v) for v in ('train','val','test')}
 open(stage/'README.md','w').write(f"""# {cfg['dataset']}
 
-Street photos of cigarette butts, one phone session, labelled by hand. Full frames at native resolution
+Street photos of cigarette butts, one phone session in Valencia, Spain, labelled by hand. Licence: CC BY 4.0. Full frames at native resolution
 (upright, metadata stripped, plates and faces blurred). Tiling happens at training time.
 
 - images/: {len(split)} PNG frames

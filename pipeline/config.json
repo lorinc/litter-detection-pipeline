@@ -146,7 +146,9 @@
     "public_repo": "https://github.com/lorinc/litter-detection-pipeline.git",
     "public_clone": "../../../litter-detection-pipeline",
     "publish_docs": {
-      "docs/capture-protocol.md": "output/complete/capture-protocol.md"
+      "docs/capture-protocol.md": "output/complete/capture-protocol.md",
+      "docs/training-runs.md": "output/complete/training-runs.md",
+      "docs/fig/eval_runs_val.png": "output/complete/fig/eval_runs_val.png"
     },
     "eval": {
       "adapter": "yolo",
