@@ -145,6 +145,9 @@
     "kaggle_user": "lorinc",
     "public_repo": "https://github.com/lorinc/litter-detection-pipeline.git",
     "public_clone": "../../../litter-detection-pipeline",
+    "publish_docs": {
+      "docs/capture-protocol.md": "output/complete/capture-protocol.md"
+    },
     "eval": {
       "adapter": "yolo",
       "threshold": 0.25,

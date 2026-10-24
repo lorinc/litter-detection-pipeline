@@ -1,0 +1,16 @@
+{
+  "data_dir": "annotation_tool/example",
+  "exclude": [],
+  "annotate": {
+    "host": "127.0.0.1",
+    "port": 8712,
+    "annotator_pass": 1,
+    "loupe_px": 220,
+    "loupe_zooms": [
+      2,
+      6,
+      12
+    ],
+    "accept_all_default": 0.5
+  }
+}

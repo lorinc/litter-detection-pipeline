@@ -1,6 +1,6 @@
 """Local annotation server (Python standard library only, no network beyond localhost).
 usage: annotate.py [--config PATH]   then open http://127.0.0.1:<annotate.port>/
-Serves tool/index.html, the PNG copies, labels and proposals. Proposals are served for train images only; val and
+Serves annotation_tool/index.html, the image copies (PNG, or JPEG as in annotation_tool/example/), labels and proposals. Proposals are served for train images only; val and
 test requests are refused here (blind rule), whatever the page asks. Labels autosave to <data_dir>/labels/<image>.json.
 """
 import json,os,re
@@ -25,12 +25,15 @@ class H(BaseHTTPRequestHandler):
         self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(body)
     def do_GET(self):
         p=self.path.split('?')[0].strip('/').split('/')
-        if p==['']: return self.send(200,(HERE/'tool/index.html').read_bytes(),'text/html; charset=utf-8')
+        if p==['']: return self.send(200,(HERE/'annotation_tool/index.html').read_bytes(),'text/html; charset=utf-8')
         if p==['api','config']: return self.send(200,{k:A[k] for k in ('annotator_pass','loupe_px','loupe_zooms','accept_all_default')})
         if p==['api','list']: return self.send(200,summary())
         if len(p)==3 and p[0]=='api' and STEM.match(p[2]) and p[2] in split:
             s=p[2]
-            if p[1]=='image': return self.send(200,(data/'images'/f'{s}.png').read_bytes(),'image/png')
+            if p[1]=='image':
+                f=data/'images'/f'{s}.png'
+                if f.exists(): return self.send(200,f.read_bytes(),'image/png')
+                return self.send(200,(data/'images'/f'{s}.jpg').read_bytes(),'image/jpeg')
             if p[1]=='labels': return self.send(200,label_of(s) or {})
             if p[1]=='proposals':
                 if split[s]!='train': return self.send(403,{'error':'blind image: proposals are never served for val/test'})
