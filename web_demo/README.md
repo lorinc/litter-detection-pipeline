@@ -2,7 +2,8 @@
 
 A static page that runs the trained detector (YOLO11s, run 2 of `docs/training-runs.md`) in the browser with
 ONNX Runtime Web: on the GPU through WebGPU where the browser offers it, otherwise on the CPU through WebAssembly.
-Photos are processed locally and never uploaded.
+Photos are processed locally and never uploaded. Live at https://lorinc.github.io/litter-detection-pipeline/web_demo/ (GitHub Pages, served from this
+repository's main branch).
 
 - `index.html`, `app.js`: the page. `app.js` ports the pipeline's scoring exactly (`pipeline/detectors.py` YOLO
   adapter and `pipeline/tiling.py` with `fit=True`): 640 px tiles at 384 px spacing with edge tiles shifted inward,
