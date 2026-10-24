@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Litter Detection Demo</title>
+<style>
+  :root { --bg:#fcfcfb; --panel:#f3f2ee; --ink:#1f1f1d; --muted:#5d5c57; --line:#dcdad3; --accent:#2a78d6; --box:#ff3b30; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1a1a19; --panel:#242422; --ink:#f0efec; --muted:#b5b4ab; --line:#3a3a37; --accent:#3987e5; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:1.45rem; margin:0 0 4px; }
+  h2 { font-size:1.05rem; margin:0 0 8px; }
+  p { margin:0 0 10px; }
+  .sub { color:var(--muted); margin-bottom:18px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+  .panel ul { margin:4px 0 8px; padding-left:20px; }
+  .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; margin-bottom:12px; }
+  .gallery button { padding:0; border:2px solid var(--line); border-radius:8px; background:none; cursor:pointer; overflow:hidden; text-align:left; color:var(--ink); }
+  .gallery button:hover, .gallery button:focus-visible { border-color:var(--accent); outline:none; }
+  .gallery img { display:block; width:100%; aspect-ratio:20/9; object-fit:cover; }
+  .gallery span { display:block; padding:4px 8px; font-size:.82rem; color:var(--muted); }
+  .controls { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; margin-bottom:12px; }
+  .upload { display:inline-block; padding:8px 14px; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; font-weight:600; }
+  .upload input { display:none; }
+  label.thr { display:flex; align-items:center; gap:8px; color:var(--muted); }
+  #status { color:var(--muted); min-height:1.5em; margin-bottom:8px; }
+  #warn { display:none; border-left:4px solid #e08a00; padding:8px 12px; background:var(--panel); margin-bottom:10px; }
+  .stage { position:relative; width:100%; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#000; min-height:120px; }
+  canvas { display:block; width:100%; height:auto; }
+  .hint { color:var(--muted); font-size:.85rem; margin-top:6px; }
+  details summary { cursor:pointer; font-weight:600; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Litter detection demo</h1>
+  <p class="sub">A small detector (YOLO11s) finds cigarette butts on pavement. It runs entirely in your browser, on your GPU where the browser supports WebGPU; photos are never uploaded anywhere.</p>
+
+  <section class="panel" aria-labelledby="info-h">
+    <h2 id="info-h">What photos it is made for</h2>
+    <p>The model was trained on one kind of photo. The closer a photo is to it, the better the detection; every difference below lowers accuracy, often a lot.</p>
+    <ul>
+      <li><strong>Pavement seen from low down:</strong> a phone held about 50 cm above the ground (the height of a small robot's camera), tilted down at the ground in front, so the ground fills most of the frame.</li>
+      <li><strong>Full resolution, landscape:</strong> the original photo from the phone camera (about 4000×1800 px or more), not a screenshot or a copy shrunk by a messaging app. The model finds butts that cover roughly 30–250 pixels along their length.</li>
+      <li><strong>Daylight, dry ground:</strong> sun or shade. No night, rain or flash.</li>
+      <li><strong>City pavement:</strong> tiles, brick, asphalt, kerbs, drains. Grass, gravel, sand and leaf litter were not in training.</li>
+      <li><strong>Sharp:</strong> hold still; motion blur hides small butts.</li>
+    </ul>
+    <p>Photos taken standing up (butts too small in pixels), extreme close-ups, other camera heights, other cities and other light all move away from what the model has seen. Even within its own kind of photo, close-ups of one or two butts are its weakest case.</p>
+    <details>
+      <summary>How good is it?</summary>
+      <p>It was trained on 87 photos from one 22-minute walk in Valencia, Spain, with one phone. On 19 held-out photos from the same walk it found 89% of butts with about 2.4 false alarms per photo at the default threshold (0.25). Those photos share streets, light and phone with the training set, so expect lower accuracy on your own photos. Full results: <a href="https://github.com/lorinc/litter-detection-pipeline/blob/main/docs/training-runs.md">training write-up</a>. Dataset: <a href="https://www.kaggle.com/datasets/lorinc/butt-field-2026-10-01">Kaggle</a> (CC BY 4.0).</p>
+    </details>
+  </section>
+
+  <h2>Try an example</h2>
+  <p class="hint" style="margin-top:-4px">Validation photos from the same walk; none of them was used in training. Each one is about 2 MB.</p>
+  <div class="gallery" id="gallery"></div>
+
+  <div class="controls">
+    <label class="upload">Upload your own photo<input type="file" id="file" accept="image/*"></label>
+    <label class="thr">Threshold <input type="range" id="thr" min="0.05" max="0.9" step="0.05" value="0.25"> <output id="thrv">0.25</output></label>
+  </div>
+  <div id="warn" role="note"></div>
+  <div id="status" aria-live="polite">Pick an example or upload a photo. The model (38 MB) loads on first use.</div>
+  <div class="stage"><canvas id="view" width="1000" height="450" aria-label="Photo with detected butts outlined"></canvas></div>
+  <p class="hint">Red boxes are detections at or above the threshold, labelled with the model's score. Lowering the threshold finds more butts and more false alarms; it re-filters without running the model again.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

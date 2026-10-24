@@ -148,7 +148,8 @@
     "publish_docs": {
       "docs/capture-protocol.md": "output/complete/capture-protocol.md",
       "docs/training-runs.md": "output/complete/training-runs.md",
-      "docs/fig/eval_runs_val.png": "output/complete/fig/eval_runs_val.png"
+      "docs/fig/eval_runs_val.png": "output/complete/fig/eval_runs_val.png",
+      "web_demo": "../13-web-demo/web_demo"
     },
     "eval": {
       "adapter": "yolo",

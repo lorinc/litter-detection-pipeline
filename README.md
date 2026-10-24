@@ -109,6 +109,7 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 - `annotation_tool/LABELING_POLICY.md`: the rule the annotation followed, and what it means for the labels.
 - `annotation_tool/example/`: four example photos (landscape, JPEG, no metadata) with their own config; three are training photos with zero-shot proposals, one is a validation photo shown in blind mode. They vary in light (shade, sun, mixed), surface and shot type.
 - `docs/training-runs.md`: the first trained detectors against the OWLv2 baseline.
+- `web_demo/`: a static page that runs the trained detector in the browser (see Web demo).
 - `docs/capture-protocol.md`: how to shoot the next photo set, and which weakness of the current one each rule removes.
 
 | Script | What it does |
@@ -125,6 +126,15 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 | `tiling.py`, `metrics.py`, `detectors.py`, `evaluate.py` | Evaluation harness: tiling, matching, detector adapters, full-frame scoring |
 | `run.py`, `publish.py` | Sync code, train one or more runs on Kaggle (one GPU each), download, evaluate |
 | `upload_kaggle.py` | Upload the image copies and labels as a Kaggle dataset (a new version if it exists) |
+
+## Web demo
+
+`web_demo/` runs the trained YOLO11s (run 2) in the browser with ONNX Runtime Web: on the GPU through WebGPU
+where the browser offers it, otherwise on the CPU. Four validation photos run on a click, and visitors can try their
+own photos, which are processed locally and never uploaded. An info panel states the photo the model is made for
+(low camera height, full resolution, landscape, daylight, dry city pavement) and that deviations lower accuracy.
+The browser code ports the harness's tiling and merging exactly; the check is in `web_demo/README.md`. To run it
+locally: `cd web_demo && python3 -m http.server 8765`, then open http://127.0.0.1:8765/.
 
 ## Trying the annotation tool
 
