@@ -60,7 +60,7 @@ the same scale.
   (`YOLO(weights).export(format='onnx', imgsz=640, simplify=True, dynamic=False, opset=17)`), input
   `images` [1, 3, 640, 640] (RGB / 255), output `output0` [1, 5, 8400] (cx, cy, w, h, score). The YOLO11s models are
   38 MB each, the YOLO11n model 11 MB.
-- `examples/`: ten validation photos (not used in training), JPEG quality 92, with 480×216 thumbnails at quality 85, shown
+- `examples/`: twelve validation photos (not used in training), JPEG quality 92, with 480×216 thumbnails at quality 85, shown
   in a 6-column grid (3 columns under 700 px). CC BY 4.0, like the dataset.
 
 ## Check against the harness

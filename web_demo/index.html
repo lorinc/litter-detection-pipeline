@@ -57,6 +57,7 @@
   <div id="status" aria-live="polite">Pick an example or upload a photo. Each model (11–38 MB) loads on first use.</div>
   <div class="stage"><canvas id="view" width="1000" height="450" aria-label="Photo with detected butts outlined"></canvas><div id="loupes" aria-hidden="true"></div></div>
   <p class="hint">Every detection is shown with the model's score, coloured by score: green at 78% and up, orange at 65–78%, red below 65%. Lower scores hold more of the false alarms. Switching the model runs detection again on the same photo. With a mouse, hovering over the photo shows it magnified 2× and 6× at full resolution.</p>
+  <footer class="hint" style="margin-top:24px">Results and method: <a href="https://github.com/lorinc/litter-detection-pipeline/blob/main/docs/cross-validation.md">cross-validation write-up</a>, <a href="https://github.com/lorinc/litter-detection-pipeline/blob/main/docs/training-runs.md">training write-up</a>. Dataset and example photos: <a href="https://www.kaggle.com/datasets/lorinc/butt-field-2026-10-01">Kaggle</a> (CC BY 4.0).</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js"></script>
 <script src="app.js"></script>

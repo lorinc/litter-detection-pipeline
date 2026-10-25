@@ -29,6 +29,8 @@ const EXAMPLES = [
   ['20261001_134937', 'wide, shade, blue tiles and bollards'],
   ['20261001_135001', 'wide, shade, shopfront and shutter'],
   ['20261001_134008', 'wide, shade, small tiles and kerb'],
+  ['20261001_134505', 'wide, sun, red brick and granite'],
+  ['20261001_134130', 'close-up, shade, edge of a utility cover'],
 ];
 
 const $ = id => document.getElementById(id);
