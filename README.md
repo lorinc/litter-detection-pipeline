@@ -8,78 +8,55 @@ protocol. The full image set and its labels are a public Kaggle dataset (see Dat
 
 ## Results so far
 
-Readable on a phone: [cross-validation results](https://lorinc.github.io/litter-detection-pipeline/docs/cross-validation.html)
-and [first trained detectors against OWLv2](https://lorinc.github.io/litter-detection-pipeline/docs/training-runs.html).
+<img src="docs/fig/progress_val.png" alt="Recall against false positives per photo on 19 validation photos for OWLv2 (zero-shot, 119 s per photo), YOLO11s (6.5 s) and YOLO11n (2.1 s)" width="700">
 
-All numbers come from one capture session (4000×1800 px phone photos), scored on whole photos by the evaluation
-harness. Bracketed ranges are 95% intervals. The tables below use the validation split (19 photos, 46 labelled
-butts, labelled without detector suggestions); the full write-up, with the recall-vs-false-positive curve, size
-and shot-type tables and known gaps, is [`docs/training-runs.md`](docs/training-runs.md).
+The zero-shot baseline and the two current trained models on the same 19 validation photos (46 butts, labelled
+without detector suggestions), scored on whole photos by one evaluation harness. The trained models are the fold 0
+models of the cross-validation: they trained on the other 87 photos and never saw these 19. All photos come from
+one capture session (4000×1800 px phone photos), one seed per model; bracketed ranges are 95% intervals, and the
+curves have none.
 
-**Accuracy at each model's operating threshold**
-
-| | Model | Threshold | Recall | False positives per photo |
-|---|---|---|---|---|
-| Baseline | OWLv2, zero-shot (`google/owlv2-base-patch16-ensemble`) | 0.10 | 97.8% (88.7–99.6%) | 7.3 (4.7–10.7) |
-| Current, run 1 | YOLO11s trained here, uncertain (`maybe`) boxes as background | 0.25 | 82.6% (69.3–90.9%) | 1.6 (1.0–2.2) |
-| Current, run 2 | YOLO11s trained here, uncertain (`maybe`) boxes masked | 0.25 | 89.1% (77.0–95.3%) | 2.4 (1.6–3.3) |
-
-**Accuracy at matched recall** (false positives per photo at the lowest threshold that reaches the recall, read
-from each model's curve; a fairer comparison than fixed thresholds)
-
-| Recall at least | OWLv2 | Run 1 | Run 2 |
+| | OWLv2, zero-shot | YOLO11s (`04-cv-hard-negatives`, fold 0) | YOLO11n (`06-cv-yolo11n`, fold 0) |
 |---|---|---|---|
-| 80% | 1.0 | 0.4 | 0.7 |
-| 89% | 1.4 | 4.3 | 2.3 |
-| 97.8% | 6.8 | not reached (maximum 89.1%) | 6.0 |
+| Operating threshold | 0.10 | 0.25 | 0.25 |
+| Recall at that threshold | 97.8% (88.7–99.6%) | 82.6% (69.3–90.9%) | 78.3% (64.4–87.7%) |
+| False positives per photo at that threshold | 7.3 (4.7–10.7) | 0.84 (0.47–1.32) | 0.74 (0.37–1.16) |
+| False positives per photo at 70% recall | 0.58 | 0.05 | 0.00 |
+| at 80% recall | 1.00 | 0.42 | 0.95 |
+| at 85% recall | 1.26 | 1.89 | 2.68 |
+| at 89% recall | 1.37 | 2.00 | not reached |
+| at 97.8% recall | 6.79 | not reached | not reached |
+| Highest recall reached | 100% | 89.1% | 87.0% |
+| Parameters; compute per photo | 155 M; 11,488 GFLOPs | 9.4 M; 1,071 GFLOPs | 2.6 M; 322 GFLOPs |
+| Time per photo, laptop CPU (i5-1145G7) | 119 s | 6.5 s | 2.1 s |
+| Detection per 640 px tile, Kaggle T4 | not measured | 10.7 ms | 9.2 ms |
 
-**Speed per photo** (50 tiles of 640 px for YOLO; 960 px tiles at 720 px spacing for OWLv2)
+Matched-recall rows give false positives per photo at the highest threshold that reaches the recall, read from each
+model's curve; they compare models at equal recall, which fixed thresholds do not. T4 figures are Ultralytics'
+end-of-training timing on small batches and do not separate the two model sizes.
 
-| Model | Parameters | Compute | Laptop CPU (i5-1145G7), measured | NVIDIA T4 GPU, estimated |
-|---|---|---|---|---|
-| OWLv2 (baseline) | 155 M | 11,488 GFLOPs | 119 s | about 6 s (within a factor of 2) |
-| YOLO11s (current) | 9.4 M | 1,071 GFLOPs | 4.7–5.2 s | about 0.6–0.7 s |
-| YOLO11n (projected, not trained yet) | 2.6 M | about 330 GFLOPs | not measured | about 0.2–0.5 s |
+- **At strict settings (70–80% recall) both trained models match or beat OWLv2.**
+- **From about 85% recall up, OWLv2 is more precise**, and the trained models cannot reach its high-recall range:
+  they stop at 89.1% and 87.0% recall.
+- **YOLO11n trades the high-recall end for speed:** about 3 times faster than YOLO11s on the same CPU and about 58
+  times faster than OWLv2.
+- **Every gap here rests on a few butts:** one butt is about 2 points of recall. The validation photos come from
+  the same walk as the training photos, which flatters the trained models against a zero-shot one; a photo session
+  at new locations is the real test.
 
-**Reading:**
+**Cross-validation** (5 folds over all 106 training and validation photos, 263 butts; each recipe trained once per
+fold and scored on the fold it did not see; threshold 0.25): `04-cv-hard-negatives` finds 84.0% (79.1–88.0%) with
+1.26 (0.98–1.57) false positives per photo, `06-cv-yolo11n` 81.4% (76.2–85.6%) with 1.01 (0.77–1.22). Hard-negative
+tiles cut false positives against run 02's recipe (`03-cv-baseline`) by 0.59 per photo at threshold 0.25, a real
+cut by a paired bootstrap, but at matched recall (80%, 85%, 88%) no pair of recipes differs by more than noise.
+YOLO11n is 2.5–3 times faster than YOLO11s on CPU across the runs and reaches at most 89.0% recall against 92.4%.
+OWLv2 is not in the cross-validation, because training-photo labels were made with its proposals on screen.
 
-- The trained YOLO11s is about 23 times faster than OWLv2 on the same CPU, from about 11 times less compute.
-- Its accuracy is in OWLv2's range, not clearly better or worse: fewer false positives at 80% recall, more at
-  89%, and slightly fewer at OWLv2's own recall. With 19 validation photos, most of these differences are inside
-  the noise.
-- Run 1 against run 2 (how uncertain boxes are treated in training) is inconclusive: their intervals overlap.
-- The validation photos come from the same session as the training photos (same streets, light and phone), which
-  flatters a trained model against a zero-shot one. A photo session at new locations is the real test.
-- The T4 figures are estimates: YOLO11s from Ultralytics' own timing on a Kaggle T4 (12–15 ms per tile for the
-  trained models, × 50 tiles), OWLv2 and YOLO11n scaled from it by compute. Small models use a GPU less
-  efficiently, hence the wide YOLO11n range. No accuracy is projected for YOLO11n.
-- Training YOLO11s for 100 epochs takes 22–24 minutes on one T4 with validation after every epoch, 11–14
-  minutes without it (two runs sharing the machine).
-
-**Cross-validation: hard-negative tiles** ([`docs/cross-validation.md`](docs/cross-validation.md))
-
-Run 2's recipe (`mask`) against the same plus hard-negative tiles (`mask_hn`: one training tile centred on each
-rejected zero-shot proposal). 5 folds over the 106 training and validation photos: fold 0 is the validation split,
-folds 1–4 cut the training photos by time group, and their labels were made with zero-shot proposals on screen, so
-pooled scores compare the two recipes with each other, not with OWLv2. Each recipe is trained once per fold and
-scored on the fold it did not see (final-epoch checkpoint, threshold 0.25); pooled over all 106 photos (259 butts).
-A difference counts as real when its 95% interval from a paired bootstrap over the same photos excludes zero.
-
-| | Recall | False positives per photo |
-|---|---|---|
-| `mask` (run 2's recipe) | 86.1% (81.4–89.8%) | 1.91 (1.52–2.32) |
-| `mask_hn` (+ hard-negative tiles) | 83.8% (78.8–87.8%) | 1.31 (1.01–1.63) |
-| Difference | −2.3 points (−5.5 to +1.5), inside noise | −0.60 (−1.01 to −0.23), real |
-
-<img src="docs/fig/cv_mask_vs_mask_hn.png" alt="Pooled recall against false positives per photo for mask and mask_hn" width="700">
-
-- At threshold 0.25, hard-negative tiles cut false positives by about a third, lower in every fold, with the recall
-  change inside noise.
-- At equal recall (read from the pooled curves, no interval) the two are about the same between 75% and 86%
-  recall: most of the cut comes from the hard-negative models scoring lower overall. `mask_hn` is ahead at 88–90%
-  recall (2.3–2.6 against 3.2–4.7 false positives per photo).
-- The switch adds both harder and many more butt-free tiles, so a gain would not say which caused it; a pair that
-  changes only the share of empty tiles is next.
+Full write-ups, readable on a phone:
+[trained detectors against OWLv2](https://lorinc.github.io/litter-detection-pipeline/docs/training-runs.html)
+(this chart, runs `01-maybe-as-background` and `02-maybe-masked`, size and shot-type tables, known gaps) and
+[cross-validation](https://lorinc.github.io/litter-detection-pipeline/docs/cross-validation.html)
+(`03-cv-baseline` to `06-cv-yolo11n`, paired comparisons, matched recall, speed).
 
 ## The pipeline is parametric
 
@@ -137,8 +114,8 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 - `annotation_tool/index.html`: the browser page of the annotation tool, served by `pipeline/annotate.py`.
 - `annotation_tool/LABELING_POLICY.md`: the rule the annotation followed, and what it means for the labels.
 - `annotation_tool/example/`: four example photos (landscape, JPEG, no metadata) with their own config; three are training photos with zero-shot proposals, one is a validation photo shown in blind mode. They vary in light (shade, sun, mixed), surface and shot type.
-- `docs/training-runs.md`: the first trained detectors against the OWLv2 baseline.
-- `docs/cross-validation.md`: 5-fold cross-validation of run 2's recipe against the same plus hard-negative tiles.
+- `docs/training-runs.md`: the trained detectors against the OWLv2 baseline (the chart above, and the first runs `01-maybe-as-background` and `02-maybe-masked`).
+- `docs/cross-validation.md`: 5-fold cross-validation of `03-cv-baseline`, `04-cv-hard-negatives`, `05-cv-more-empty-tiles` and `06-cv-yolo11n`.
 - `web_demo/`: a static page that runs the trained detector in the browser (see Web demo).
 - `docs/capture-protocol.md`: how to shoot the next photo set, and which weakness of the current one each rule removes.
 
@@ -164,8 +141,9 @@ Live: <a href="https://lorinc.github.io/litter-detection-pipeline/web_demo/" tar
 <a href="https://lorinc.github.io/litter-detection-pipeline/web_demo/" target="_blank"><img src="docs/fig/web_demo_screenshot.png" alt="The web demo: four example photos, a threshold slider, and a validation photo with three detected butts boxed in red" width="865"></a>
 
 `web_demo/` runs a trained YOLO11s in the browser with ONNX Runtime Web: on the GPU through WebGPU where the
-browser offers it, otherwise on the CPU. A selector offers two models: the hard-negative recipe's fold 0 model from
-the cross-validation (default) and run 2, for comparison. Four validation photos run on a click, and visitors can try their
+browser offers it, otherwise on the CPU. A selector offers two models: "04 Hard negatives (fold 0)", the
+`04-cv-hard-negatives` fold 0 model from the cross-validation (default), and "02 Maybe masked", run
+`02-maybe-masked`, for comparison. Four validation photos run on a click, and visitors can try their
 own photos, which are processed locally and never uploaded. An info panel states the photo the model is made for
 (low camera height, full resolution, landscape, daylight, dry city pavement), that deviations lower accuracy, and
 both models' measured accuracy.
