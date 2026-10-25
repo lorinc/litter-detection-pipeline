@@ -3,11 +3,18 @@
 // boxes clipped to the tile, mapped back to the photo and merged with NMS at IoU 0.3. Inputs are RGB / 255; a tile
 // beyond a small photo's edge is padded with grey 114, as Ultralytics' letterbox does.
 const TILE = 640, STRIDE = 384, RAW = 0.01, NMS_TILE = 0.7, NMS_ALL = 0.3, MAX_DET = 300;
-// Both models are YOLO11s trained on the same 87 photos. Each has its own default threshold: the one its measured
-// accuracy is stated at. The slider keeps the visitor's setting when the model is switched.
+// All three models train on the same 87 photos. Keys are initiative 12's run names; labels and info are what visitors
+// see (info is shown under the selector).
+// Every detection down to RAW is shown, coloured by its score band: [lowest score, box colour, label text colour].
+const BANDS = [[0.78, '#34c759', '#1f1f1d'], [0.65, '#ff9500', '#1f1f1d'], [0, '#ff3b30', '#fff']];
+const band = s => BANDS.find(b => s >= b[0]);
 const MODELS = {
-  '04-cv-hard-negatives-f0': { file: 'model/yolo11s-04-cv-hard-negatives-f0.onnx', label: '04 Hard negatives (fold 0)', thr: 0.25 },
-  '02-maybe-masked':         { file: 'model/yolo11s-02-maybe-masked.onnx',         label: '02 Maybe masked',            thr: 0.25 },
+  '02-maybe-masked':         { file: 'model/yolo11s-02-maybe-masked.onnx',         label: 'YOLO11s first',    mb: 38,
+    info: 'Standard-size model (9.4 M parameters, 38 MB download), fine-tuned on 87 photos from one walk, without the look-alike spots. More false alarms than YOLO11s adjusted.' },
+  '04-cv-hard-negatives-f0': { file: 'model/yolo11s-04-cv-hard-negatives-f0.onnx', label: 'YOLO11s adjusted', mb: 38,
+    info: 'Standard-size model (9.4 M parameters, 38 MB download), fine-tuned on 87 photos from one walk. Adjusted: also trained on spots that fool OWLv2, an off-the-shelf, generic vision model (cracks, gum, leaves), so it raises fewer false alarms.' },
+  '06-cv-yolo11n-f0':        { file: 'model/yolo11n-06-cv-yolo11n-f0.onnx',        label: 'YOLO11n fast',     mb: 11,
+    info: 'Nano model, a quarter of the size (2.6 M parameters, 11 MB download), with the same training as YOLO11s adjusted. About 3× faster; misses a few more butts.' },
 };
 const DEFAULT_MODEL = '04-cv-hard-negatives-f0';
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
@@ -23,7 +30,7 @@ const CPU_NOTE = 'This browser offers no WebGPU, so detection runs on the CPU: e
 const PARAMS = new URLSearchParams(location.search);   // ?cpu=1 skips WebGPU; ?example=STEM runs one example at load
 const sessions = {};                                // model key -> InferenceSession
 let backend = '', current = null, runId = 0;         // current = {bitmap, dets, name}
-let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=02-maybe-masked picks run 02
+let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=06-cv-yolo11n-f0 picks run 06
 
 function starts(n) {
   if (n <= TILE) return [0];
@@ -57,7 +64,7 @@ async function loadModel(key) {
   let session = null;
   ort.env.wasm.wasmPaths = ORT_DIST;
   ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
-  status(`Loading the model "${MODELS[key].label}" (38 MB, once)…`);
+  status(`Loading the model "${MODELS[key].label}" (${MODELS[key].mb} MB, once)…`);
   const bytes = new Uint8Array(await (await fetch(MODELS[key].file)).arrayBuffer());
   if (navigator.gpu && !PARAMS.has('cpu')) {
     try { session = await ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] }); backend = 'GPU (WebGPU)'; }
@@ -105,23 +112,49 @@ async function detect(bitmap, session, id) {   // returns null when a newer run 
 function draw() {
   const c = $('view'), g = c.getContext('2d');
   if (!current) return;
-  const { bitmap, dets } = current, thr = +$('thr').value;
+  const { bitmap, dets } = current;
   c.width = bitmap.width; c.height = bitmap.height;
   g.drawImage(bitmap, 0, 0);
   if (!dets) return;
   const lw = Math.max(3, bitmap.width / 700), fs = Math.max(22, bitmap.width / 110);
   g.lineWidth = lw; g.font = `600 ${fs}px system-ui, sans-serif`; g.textBaseline = 'bottom';
-  let shown = 0;
-  for (const [s, x0, y0, x1, y1] of dets) {
-    if (s < thr) continue; shown++;
-    const pad = lw * 2;
-    g.strokeStyle = '#ff3b30'; g.strokeRect(x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad);
-    const label = s.toFixed(2), tw = g.measureText(label).width;
+  for (const [s, x0, y0, x1, y1] of [...dets].reverse()) {   // lowest scores first, so higher bands draw on top
+    const [, col, ink] = band(s), pad = lw * 2;
+    g.strokeStyle = col; g.strokeRect(x0 - pad, y0 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad);
+    const label = Math.round(s * 100) + '%', tw = g.measureText(label).width;
     const ly = y0 - pad - fs - 4 >= 0 ? y0 - pad - fs - 4 : y1 + pad;   // label above the box, or below it at the top edge
-    g.fillStyle = '#ff3b30'; g.fillRect(x0 - pad, ly, tw + 10, fs + 4);
-    g.fillStyle = '#fff'; g.fillText(label, x0 - pad + 5, ly + fs + 2);
+    g.fillStyle = col; g.fillRect(x0 - pad, ly, tw + 10, fs + 4);
+    g.fillStyle = ink; g.fillText(label, x0 - pad + 5, ly + fs + 2);
   }
-  current.shown = shown;
+  drawLoupes();
+}
+
+// Hover magnifiers, as in initiative 12's annotator: one column of square loupes at fixed zooms of the photo's own
+// pixels, on the side of the window away from the cursor, with thin detection boxes and a crosshair.
+const LOUPE_ZOOMS = [2, 6, 12], LOUPE_PX = 220;
+const loupes = LOUPE_ZOOMS.map(z => {
+  const c = document.createElement('canvas'); $('loupes').appendChild(c); return { z, c, g: c.getContext('2d') };
+});
+let mouse = null;                                    // pointer position over the photo, client coordinates
+
+function drawLoupes() {
+  const box = $('loupes');
+  if (!mouse || !current) { box.style.display = 'none'; return; }
+  const { bitmap, dets } = current, r = $('view').getBoundingClientRect();
+  const nx = (mouse.x - r.left) * bitmap.width / r.width, ny = (mouse.y - r.top) * bitmap.height / r.height;
+  const L = Math.floor(Math.min(LOUPE_PX, (innerHeight - 24 - 6 * (loupes.length - 1)) / loupes.length));
+  box.style.display = 'flex'; box.style.left = mouse.x < innerWidth / 2 ? (innerWidth - L - 12) + 'px' : '12px';
+  for (const { z, c, g } of loupes) {
+    if (c.width !== L) c.width = c.height = L;
+    g.imageSmoothingEnabled = false; g.fillStyle = '#000'; g.fillRect(0, 0, L, L);
+    const sw = L / z; g.drawImage(bitmap, nx - sw / 2, ny - sw / 2, sw, sw, 0, 0, L, L);
+    const X = x => (x - nx) * z + L / 2, Y = y => (y - ny) * z + L / 2;
+    g.lineWidth = 1.5;
+    for (const [s, x0, y0, x1, y1] of [...(dets || [])].reverse()) { g.strokeStyle = band(s)[1]; g.strokeRect(X(x0), Y(y0), (x1 - x0) * z, (y1 - y0) * z); }
+    g.strokeStyle = 'rgba(0,255,255,.8)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(L / 2, 0); g.lineTo(L / 2, L); g.moveTo(0, L / 2); g.lineTo(L, L / 2); g.stroke();
+    g.fillStyle = '#0ff'; g.font = '12px sans-serif'; g.fillText(z + '×', 5, 15);
+  }
 }
 
 function status(t) { $('status').textContent = t; }
@@ -144,12 +177,16 @@ async function run(bitmap, name) {
     const r = await detect(bitmap, session, id);
     if (!r) return;
     current.dets = r.dets; draw();
-    status(`${name}: ${current.shown} detections at threshold ${(+$('thr').value).toFixed(2)} with "${MODELS[key].label}" · ${r.tiles} tiles in ${(r.ms / 1000).toFixed(1)} s on ${backend}.`);
+    const n = BANDS.map(([lo], i) => r.dets.filter(d => d[0] >= lo && (i === 0 || d[0] < BANDS[i - 1][0])).length);
+    status(`${name}: ${r.dets.length} detections with "${MODELS[key].label}" (${n[0]} at 78% and up, ${n[1]} at 65–78%, ${n[2]} below 65%) · ${r.tiles} tiles in ${(r.ms / 1000).toFixed(1)} s on ${backend}.`);
     window.lastResult = { name, model: key, backend, ms: r.ms, tiles: r.tiles, dets: r.dets };   // read by the page test
   } catch (e) { console.error(e); if (id === runId) status('Detection failed: ' + e.message); }
 }
 
-function setThr(v) { $('thr').value = v; $('thrv').textContent = (+v).toFixed(2); }
+function showModel() {
+  const m = MODELS[modelKey];
+  $('modelinfo').innerHTML = `<strong>${m.label}</strong>: ${m.info}`;
+}
 
 async function runExample(stem) {
   status('Loading the example photo…');
@@ -168,16 +205,17 @@ $('file').onchange = async e => {
   try { run(await createImageBitmap(f, { imageOrientation: 'from-image' }), f.name); }
   catch (err) { status('This file could not be read as an image.'); }
 };
-$('thr').oninput = () => {
-  $('thrv').textContent = (+$('thr').value).toFixed(2); draw();
-  if (current && current.dets) status(`${current.name}: ${current.shown} detections at threshold ${(+$('thr').value).toFixed(2)} with "${MODELS[modelKey].label}" on ${backend}.`);
-};
 for (const [key, m] of Object.entries(MODELS)) {
   const o = document.createElement('option'); o.value = key; o.textContent = m.label; $('model').appendChild(o);
 }
-$('model').value = modelKey; setThr(MODELS[modelKey].thr);
+$('model').value = modelKey; showModel();
 $('model').onchange = () => {
-  modelKey = $('model').value;
+  modelKey = $('model').value; showModel();
   if (current) run(current.bitmap, current.name);   // switching re-runs detection on the current photo
 };
+$('view').addEventListener('pointermove', e => {
+  mouse = e.pointerType === 'mouse' ? { x: e.clientX, y: e.clientY } : null; drawLoupes();
+});
+$('view').addEventListener('pointerleave', () => { mouse = null; drawLoupes(); });
+addEventListener('scroll', () => { mouse = null; drawLoupes(); }, { passive: true });   // the photo moved under a still cursor
 if (PARAMS.get('example')) runExample(PARAMS.get('example'));
