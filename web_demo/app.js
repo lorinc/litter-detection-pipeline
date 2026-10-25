@@ -24,7 +24,7 @@ const EXAMPLES = [
   ['20261001_134457', 'wide, sun, granite step and kerb'],
   ['20261001_135420', 'high angle, shade, tactile tiles'],
   ['20261001_134450', 'close-up, sun, corner with paper litter'],
-  ['20261001_134120', 'close-up, shade, one butt on tiles'],
+  ['20261001_134120', 'cigarillo end: out of scope, too unlike cigarette butts'],
   ['20261001_134126', 'high angle, shade, utility cover'],
   ['20261001_134937', 'wide, shade, blue tiles and bollards'],
   ['20261001_135001', 'wide, shade, shopfront and shutter'],

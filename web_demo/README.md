@@ -26,18 +26,18 @@ Measured accuracy (threshold 0.25 unless stated):
 
 | | Recall | False positives per photo | Source |
 |---|---|---|---|
-| YOLO11s adjusted (04 fold 0), 19 val photos | 82.6% (38 of 46) | 0.84 | `docs/cross-validation.md` |
-| YOLO11n fast (06 fold 0), 19 val photos | 78.3% (36 of 46) | 0.74 | `docs/cross-validation.md` |
-| YOLO11s first (02), 19 val photos | 89.1% (41 of 46) | 2.37 | `docs/cross-validation.md` |
-| Recipe 04 (hard negatives), pooled over 106 photos (5 folds) | 84.0% | 1.26 | `docs/cross-validation.md` |
-| Recipe 06 (04 on YOLO11n), pooled over 106 photos (5 folds) | 81.4% | 1.01 | `docs/cross-validation.md` |
-| Recipe 02, as run `03-cv-baseline`, pooled over 106 photos (5 folds) | 86.3% | 1.85 | `docs/cross-validation.md` |
+| YOLO11s adjusted (04 fold 0), 19 val photos | 83.7% (36 of 43) | 0.84 | `docs/cross-validation.md` |
+| YOLO11n fast (06 fold 0), 19 val photos | 81.4% (35 of 43) | 0.74 | `docs/cross-validation.md` |
+| YOLO11s first (02), 19 val photos | 90.7% (39 of 43) | 2.37 | `docs/cross-validation.md` |
+| Recipe 04 (hard negatives), pooled over 106 photos (5 folds) | 84.2% | 1.26 | `docs/cross-validation.md` |
+| Recipe 06 (04 on YOLO11n), pooled over 106 photos (5 folds) | 81.9% | 1.01 | `docs/cross-validation.md` |
+| Recipe 02, as run `03-cv-baseline`, pooled over 106 photos (5 folds) | 86.5% | 1.85 | `docs/cross-validation.md` |
 
-- Pooled scores use the reviewed labels. Recipe 04's false-positive cut against 02's recipe (0.59 per photo) is real
+- Pooled scores use the current labels (after the label review and the cigar-end rule). Recipe 04's false-positive cut against 02's recipe (0.59 per photo) is real
   by the paired bootstrap; the recall difference (−2.3 points) is inside noise. Recipe 06 against 04: 0.25 fewer false
   positives per photo (real), −2.6 points recall (inside noise).
 - At matched recall (80%, 85%, 88%) every paired difference is inside noise, so most of the gains at threshold 0.25
-  come from lower scores overall. YOLO11n reaches at most 89.0% recall at the lowest threshold, against 92.4% for 04.
+  come from lower scores overall. YOLO11n reaches at most 89.2% recall at the lowest threshold, against 92.7% for 04.
 - Run `05-cv-more-empty-tiles` (recipe 02 with as many random butt-free tiles as recipe 04 has) cuts false positives
   per photo to 1.46 (real against 1.85); recipe 04's further 0.20 is inside noise. Much of the hard-negative gain is
   matched by more butt-free tiles of any kind.
@@ -46,8 +46,8 @@ Measured accuracy (threshold 0.25 unless stated):
 **Score bands, no threshold:** the page shows every detection down to the raw floor (0.01), labelled with its score
 in percent and coloured by band: green at 78% and up, orange at 65–78%, red below 65%. This README gives each
 model's recall and false positives per photo on the 19 val photos counting from each band up (from the harness's
-curve in each run's `_val.json`): green only 74% / 0.05 (adjusted), 72% / 0 (fast), 67% / 0.26 (first); green and
-orange 78% / 0.16, 74% / 0.11, 80% / 0.68; all boxes 89% / 9.6, 87% / 7.4, 100% / 21. The models' scores are not on
+curve in each run's `_val.json`): green only 77% / 0.05 (adjusted), 74% / 0 (fast), 72% / 0.26 (first); green and
+orange 79% / 0.16, 77% / 0.11, 81% / 0.68; all boxes 91% / 9.6, 88% / 7.4, 100% / 21. The models' scores are not on
 the same scale.
 
 ## Files

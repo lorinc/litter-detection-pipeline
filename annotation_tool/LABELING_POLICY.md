@@ -6,7 +6,7 @@ This policy covers every image in `data/images/`, annotated with the tool (`pipe
 
 - **butt:** the annotator sees a butt.
 - **maybe:** it is likely a butt, but not certain.
-- Nothing else is labelled. No category rules (fragments, roach tips, heated-tobacco sticks, cigar ends, off-ground butts) were set; each case was judged by eye under the two definitions above.
+- Nothing else is labelled. One category rule is set: **cigar and cigarillo ends are `maybe`** (out of scope for now). They are tobacco litter, but look unlike cigarette butts (brown leaf wrapper, no filter), so they are kept out of both training signal and scoring rather than labelled background. The rule was applied to every image; the only case is one cigarillo end seen in three val images (`20261001_134111`, `20261001_134116`, `20261001_134120`). No other category rules (fragments, roach tips, heated-tobacco sticks, off-ground butts) were set; each case was judged by eye under the two definitions above.
 - Boxes are drawn around the visible butt. Touching butts get one box each.
 
 ## How confidence behaved in practice
