@@ -10,19 +10,25 @@ const BANDS = [[0.78, '#34c759', '#1f1f1d'], [0.65, '#ff9500', '#1f1f1d'], [0, '
 const band = s => BANDS.find(b => s >= b[0]);
 const MODELS = {
   '02-maybe-masked':         { file: 'model/yolo11s-02-maybe-masked.onnx',         label: 'YOLO11s first',    mb: 38,
-    info: 'Standard-size model (9.4 M parameters, 38 MB download), fine-tuned on 87 photos from one walk, without the look-alike spots. More false alarms than YOLO11s adjusted.' },
+    info: 'Standard-size model (9.4 M parameters, 38 MB download), fine-tuned on 87 photos from one walk, without the look-alike spots. More false alarms than YOLO11s adjusted. On a robot dog (Jetson Orin NX, 1080p camera): about 5 frames per second, estimated, not measured.' },
   '04-cv-hard-negatives-f0': { file: 'model/yolo11s-04-cv-hard-negatives-f0.onnx', label: 'YOLO11s adjusted', mb: 38,
-    info: 'Standard-size model (9.4 M parameters, 38 MB download), fine-tuned on 87 photos from one walk. Adjusted: also trained on spots that fool OWLv2, an off-the-shelf, generic vision model (cracks, gum, leaves), so it raises fewer false alarms.' },
+    info: 'Standard-size model (9.4 M parameters, 38 MB download), fine-tuned on 87 photos from one walk. Adjusted: also trained on spots that fool OWLv2, an off-the-shelf, generic vision model (cracks, gum, leaves), so it raises fewer false alarms. On a robot dog (Jetson Orin NX, 1080p camera): about 5 frames per second, estimated, not measured.' },
   '06-cv-yolo11n-f0':        { file: 'model/yolo11n-06-cv-yolo11n-f0.onnx',        label: 'YOLO11n fast',     mb: 11,
-    info: 'Nano model, a quarter of the size (2.6 M parameters, 11 MB download), with the same training as YOLO11s adjusted. About 3× faster; misses a few more butts.' },
+    info: 'Nano model, a quarter of the size (2.6 M parameters, 11 MB download), with the same training as YOLO11s adjusted. About 3× faster; misses a few more butts. On a robot dog (Jetson Orin NX, 1080p camera): about 15 frames per second, estimated, not measured.' },
 };
-const DEFAULT_MODEL = '04-cv-hard-negatives-f0';
+const DEFAULT_MODEL = '06-cv-yolo11n-f0';
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 const EXAMPLES = [
   ['20261001_134106', 'wide, shade, square tiles and manholes'],
   ['20261001_134246', 'wide, mixed light, red brick and asphalt'],
   ['20261001_134457', 'wide, sun, granite step and kerb'],
   ['20261001_135420', 'high angle, shade, tactile tiles'],
+  ['20261001_134450', 'close-up, sun, corner with paper litter'],
+  ['20261001_134120', 'close-up, shade, one butt on tiles'],
+  ['20261001_134126', 'high angle, shade, utility cover'],
+  ['20261001_134937', 'wide, shade, blue tiles and bollards'],
+  ['20261001_135001', 'wide, shade, shopfront and shutter'],
+  ['20261001_134008', 'wide, shade, small tiles and kerb'],
 ];
 
 const $ = id => document.getElementById(id);
@@ -30,7 +36,7 @@ const CPU_NOTE = 'This browser offers no WebGPU, so detection runs on the CPU: e
 const PARAMS = new URLSearchParams(location.search);   // ?cpu=1 skips WebGPU; ?example=STEM runs one example at load
 const sessions = {};                                // model key -> InferenceSession
 let backend = '', current = null, runId = 0;         // current = {bitmap, dets, name}
-let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=06-cv-yolo11n-f0 picks run 06
+let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=04-cv-hard-negatives-f0 picks run 04
 
 function starts(n) {
   if (n <= TILE) return [0];
@@ -130,8 +136,8 @@ function draw() {
 }
 
 // Hover magnifiers, as in initiative 12's annotator: one column of square loupes at fixed zooms of the photo's own
-// pixels, on the side of the window away from the cursor, with thin detection boxes and a crosshair.
-const LOUPE_ZOOMS = [2, 6, 12], LOUPE_PX = 220;
+// pixels, inside the photo's frame on the half away from the cursor, with thin detection boxes and a crosshair.
+const LOUPE_ZOOMS = [2, 6], LOUPE_PX = 220;
 const loupes = LOUPE_ZOOMS.map(z => {
   const c = document.createElement('canvas'); $('loupes').appendChild(c); return { z, c, g: c.getContext('2d') };
 });
@@ -142,8 +148,8 @@ function drawLoupes() {
   if (!mouse || !current) { box.style.display = 'none'; return; }
   const { bitmap, dets } = current, r = $('view').getBoundingClientRect();
   const nx = (mouse.x - r.left) * bitmap.width / r.width, ny = (mouse.y - r.top) * bitmap.height / r.height;
-  const L = Math.floor(Math.min(LOUPE_PX, (innerHeight - 24 - 6 * (loupes.length - 1)) / loupes.length));
-  box.style.display = 'flex'; box.style.left = mouse.x < innerWidth / 2 ? (innerWidth - L - 12) + 'px' : '12px';
+  const L = Math.floor(Math.min(LOUPE_PX, (r.height - 16 - 6 * (loupes.length - 1)) / loupes.length));   // fit the frame
+  box.style.display = 'flex'; box.style.left = mouse.x < r.left + r.width / 2 ? (r.width - L - 10) + 'px' : '8px';
   for (const { z, c, g } of loupes) {
     if (c.width !== L) c.width = c.height = L;
     g.imageSmoothingEnabled = false; g.fillStyle = '#000'; g.fillRect(0, 0, L, L);

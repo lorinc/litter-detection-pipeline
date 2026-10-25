@@ -14,10 +14,10 @@ keys, `?model=`) and here. Under the selector the page states the selected model
 sentence. OWLv2 is named as an off-the-shelf, generic vision model, because the adjusted training's hard-negative
 tiles come from its rejected proposals.
 
-- **YOLO11s adjusted**, the default (key `04-cv-hard-negatives-f0`): `model/yolo11s-04-cv-hard-negatives-f0.onnx`, the fold 0 model of run
+- **YOLO11s adjusted** (key `04-cv-hard-negatives-f0`): `model/yolo11s-04-cv-hard-negatives-f0.onnx`, the fold 0 model of run
   `04-cv-hard-negatives` in `docs/cross-validation.md`, final-epoch checkpoint (`last.pt`). The recipe is run 02's plus
   training tiles centred on things that look like butts but are not.
-- **YOLO11n fast** (key `06-cv-yolo11n-f0`): `model/yolo11n-06-cv-yolo11n-f0.onnx`, the fold 0 model of run `06-cv-yolo11n` in
+- **YOLO11n fast**, the default (key `06-cv-yolo11n-f0`): `model/yolo11n-06-cv-yolo11n-f0.onnx`, the fold 0 model of run `06-cv-yolo11n` in
   `docs/cross-validation.md`, `last.pt`: recipe 04 on the nano model, 2.6 M parameters against YOLO11s's 9.4 M.
 - **YOLO11s first** (key `02-maybe-masked`): `model/yolo11s-02-maybe-masked.onnx`, run `02-maybe-masked` of `docs/training-runs.md`,
   checkpoint `best.pt`.
@@ -44,11 +44,11 @@ Measured accuracy (threshold 0.25 unless stated):
 - 02's `best.pt` was selected by its score on the same val photos, which flatters it there.
 
 **Score bands, no threshold:** the page shows every detection down to the raw floor (0.01), labelled with its score
-in percent and coloured by band: green at 78% and up, orange at 65–78%, red below 65%. The info panel gives each
+in percent and coloured by band: green at 78% and up, orange at 65–78%, red below 65%. This README gives each
 model's recall and false positives per photo on the 19 val photos counting from each band up (from the harness's
 curve in each run's `_val.json`): green only 74% / 0.05 (adjusted), 72% / 0 (fast), 67% / 0.26 (first); green and
 orange 78% / 0.16, 74% / 0.11, 80% / 0.68; all boxes 89% / 9.6, 87% / 7.4, 100% / 21. The models' scores are not on
-the same scale, and the info panel says so.
+the same scale.
 
 ## Files
 
@@ -60,7 +60,8 @@ the same scale, and the info panel says so.
   (`YOLO(weights).export(format='onnx', imgsz=640, simplify=True, dynamic=False, opset=17)`), input
   `images` [1, 3, 640, 640] (RGB / 255), output `output0` [1, 5, 8400] (cx, cy, w, h, score). The YOLO11s models are
   38 MB each, the YOLO11n model 11 MB.
-- `examples/`: four validation photos (not used in training), JPEG, with thumbnails. CC BY 4.0, like the dataset.
+- `examples/`: ten validation photos (not used in training), JPEG quality 92, with 480×216 thumbnails at quality 85, shown
+  in a 6-column grid (3 columns under 700 px). CC BY 4.0, like the dataset.
 
 ## Check against the harness
 
@@ -81,6 +82,19 @@ A numpy reference of the page's algorithm, run with ONNX Runtime on the exported
 On the single-threaded CPU path on an Intel i5-1145G7, a 50-tile photo takes 39–59 s with either YOLO11s model and
 14 s with YOLO11n (`20261001_135420`: 39.3 s for 04, 13.7 s for 06, same browser session). The WebGPU path has not
 been timed on real GPU hardware.
+
+## Robot dog estimate
+
+Each model's line on the page gives an estimated frame rate on a robot dog (Unitree Go2 class, Jetson Orin NX, 1920×1080
+camera): about 15 fps for YOLO11n, about 5 fps for YOLO11s. Not measured; an inference from these assumptions:
+
+- A 1920×1080 frame takes 15 tiles (5 × 3) with this page's tiling (640 px, 384 px spacing).
+- Compute per tile from the harness (`<run>_val.json`, `compute`): 6.4 GFLOPs (YOLO11n), 21.4 GFLOPs (YOLO11s).
+- Effective throughput on the Orin NX with TensorRT FP16: 1–3 TFLOPS, assumed without a source (the board's 100 TOPS
+  is an INT8 peak). This gives 10–30 fps (YOLO11n) and 3–9 fps (YOLO11s); the page states the rounded middle.
+- Model time only: tiling, merging and camera handling are not counted.
+- Accuracy at 1920 px width is untested: the models trained on 4000 px-wide photos, so at a similar field of view a
+  butt covers about half the pixels, and many fall below the 30 px the training data starts at.
 
 ## Run locally
 

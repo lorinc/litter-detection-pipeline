@@ -14,13 +14,12 @@
   h2 { font-size:1.05rem; margin:0 0 8px; }
   p { margin:0 0 10px; }
   .sub { color:var(--muted); margin-bottom:18px; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:16px; }
-  .panel ul { margin:4px 0 8px; padding-left:20px; }
-  .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; margin-bottom:12px; }
+  .gallery { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-bottom:12px; }
+  @media (max-width:700px) { .gallery { grid-template-columns:repeat(3,1fr); } }
   .gallery button { padding:0; border:2px solid var(--line); border-radius:8px; background:none; cursor:pointer; overflow:hidden; text-align:left; color:var(--ink); }
   .gallery button:hover, .gallery button:focus-visible { border-color:var(--accent); outline:none; }
   .gallery img { display:block; width:100%; aspect-ratio:20/9; object-fit:cover; }
-  .gallery span { display:block; padding:4px 8px; font-size:.82rem; color:var(--muted); }
+  .gallery span { display:block; padding:4px 6px; font-size:.75rem; line-height:1.3; color:var(--muted); }
   .controls { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; margin-bottom:12px; }
   .upload { display:inline-block; padding:8px 14px; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; font-weight:600; }
   .upload input { display:none; }
@@ -32,10 +31,9 @@
   #warn { display:none; border-left:4px solid #e08a00; padding:8px 12px; background:var(--panel); margin-bottom:10px; }
   .stage { position:relative; width:100%; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#000; min-height:120px; }
   canvas { display:block; width:100%; height:auto; }
-  #loupes { position:fixed; top:12px; display:none; flex-direction:column; gap:6px; z-index:2; pointer-events:none; }
+  #loupes { position:absolute; top:8px; display:none; flex-direction:column; gap:6px; z-index:2; pointer-events:none; }
   #loupes canvas { width:auto; border:1px solid #888; background:#000; image-rendering:pixelated; }
   .hint { color:var(--muted); font-size:.85rem; margin-top:6px; }
-  details summary { cursor:pointer; font-weight:600; }
   a { color:var(--accent); }
   select { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:3px 6px; }
 </style>
@@ -44,36 +42,6 @@
 <main>
   <h1>Litter detection demo</h1>
   <p class="sub">A small detector (YOLO11s or YOLO11n) finds cigarette butts on pavement. It runs entirely in your browser, on your GPU where the browser supports WebGPU; photos are never uploaded anywhere.</p>
-
-  <section class="panel" aria-labelledby="info-h">
-    <h2 id="info-h">What photos it is made for</h2>
-    <p>The model was trained on one kind of photo. The closer a photo is to it, the better the detection; every difference below lowers accuracy, often a lot.</p>
-    <ul>
-      <li><strong>Pavement seen from low down:</strong> a phone held about 50 cm above the ground (the height of a small robot's camera), tilted down at the ground in front, so the ground fills most of the frame.</li>
-      <li><strong>Full resolution, landscape:</strong> the original photo from the phone camera (about 4000×1800 px or more), not a screenshot or a copy shrunk by a messaging app. The model finds butts that cover roughly 30–250 pixels along their length.</li>
-      <li><strong>Daylight, dry ground:</strong> sun or shade. No night, rain or flash.</li>
-      <li><strong>City pavement:</strong> tiles, brick, asphalt, kerbs, drains. Grass, gravel, sand and leaf litter were not in training.</li>
-      <li><strong>Sharp:</strong> hold still; motion blur hides small butts.</li>
-    </ul>
-    <p>Photos taken standing up (butts too small in pixels), extreme close-ups, other camera heights, other cities and other light all move away from what the model has seen. Even within its own kind of photo, close-ups of one or two butts are its weakest case.</p>
-    <details>
-      <summary>How good is it?</summary>
-      <p>Three models are offered, all trained on the same 87 photos from one 22-minute walk in Valencia, Spain, with one phone. <strong>YOLO11s first</strong> is the first version. <strong>YOLO11s adjusted</strong>, the default, is the same model size also trained on tiles of things that look like butts but are not, such as cracks, gum spots and leaves: the places where OWLv2, an off-the-shelf, generic vision model asked in words to find cigarette butts, found one that a person then rejected. <strong>YOLO11n fast</strong> is the adjusted training on the nano model, a quarter of the size.</p>
-      <ul>
-        <li><strong>On the 19 held-out photos of the walk</strong> (the examples are four of them), butts found and false alarms per photo, counting boxes from each colour band up:
-          <ul>
-            <li><strong>Green only</strong> (78% and up): YOLO11s adjusted 74% (34 of 46), 0.05; YOLO11n fast 72% (33), 0; YOLO11s first 67% (31), 0.26.</li>
-            <li><strong>Green and orange</strong> (65% and up): adjusted 78% (36), 0.16; fast 74% (34), 0.11; first 80% (37), 0.68.</li>
-            <li><strong>All boxes</strong>, red included: adjusted 89% (41), 9.6; fast 87% (40), 7.4; first 100% (46), 21.</li>
-          </ul>
-          The first version's saved checkpoint was the one that scored best on these same photos, which flatters it.</li>
-        <li><strong>Over all 106 photos</strong> (five-fold cross-validation: each photo scored by a model that did not train on it), counting boxes scoring 25% and up: the adjustment cut false alarms from 1.85 to 1.26 per photo, a real difference; recall went from 86% to 84%, a difference inside noise. The fast model found 81% with 1.01 false alarms per photo: fewer false alarms than YOLO11s adjusted (real), recall inside noise.</li>
-        <li><strong>Compared at equal recall instead of an equal score cut-off</strong> (80%, 85% and 88%), no two training recipes differ by more than noise: most of the drop in false alarms at 25% comes from lower scores overall. The fast model reaches at most 89% recall even counting every box, against 92% for YOLO11s adjusted.</li>
-        <li><strong>Speed:</strong> in this page on one laptop's CPU, a 50-tile photo took 14 s with YOLO11n fast against 39 s with YOLO11s adjusted; the GPU path has not been timed.</li>
-      </ul>
-      <p>The models' scores are not on the same scale, so the same score means a different level of confidence for each. All these photos share streets, light and phone with the training set, so expect lower accuracy on your own photos. Full results: <a href="https://github.com/lorinc/litter-detection-pipeline/blob/main/docs/cross-validation.md">cross-validation write-up</a>, <a href="https://github.com/lorinc/litter-detection-pipeline/blob/main/docs/training-runs.md">training write-up</a>. Dataset: <a href="https://www.kaggle.com/datasets/lorinc/butt-field-2026-10-01">Kaggle</a> (CC BY 4.0).</p>
-    </details>
-  </section>
 
   <h2>Try an example</h2>
   <p class="hint" style="margin-top:-4px">Validation photos from the same walk; none of them was used in training. Each one is about 2 MB.</p>
@@ -87,9 +55,8 @@
   <p id="modelinfo"></p>
   <div id="warn" role="note"></div>
   <div id="status" aria-live="polite">Pick an example or upload a photo. Each model (11–38 MB) loads on first use.</div>
-  <div class="stage"><canvas id="view" width="1000" height="450" aria-label="Photo with detected butts outlined"></canvas></div>
-  <div id="loupes" aria-hidden="true"></div>
-  <p class="hint">Every detection is shown with the model's score, coloured by score: green at 78% and up, orange at 65–78%, red below 65%. Lower scores hold more of the false alarms. Switching the model runs detection again on the same photo. With a mouse, hovering over the photo shows it magnified 2×, 6× and 12× at full resolution.</p>
+  <div class="stage"><canvas id="view" width="1000" height="450" aria-label="Photo with detected butts outlined"></canvas><div id="loupes" aria-hidden="true"></div></div>
+  <p class="hint">Every detection is shown with the model's score, coloured by score: green at 78% and up, orange at 65–78%, red below 65%. Lower scores hold more of the false alarms. Switching the model runs detection again on the same photo. With a mouse, hovering over the photo shows it magnified 2× and 6× at full resolution.</p>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js"></script>
 <script src="app.js"></script>
