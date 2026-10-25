@@ -6,10 +6,10 @@ const TILE = 640, STRIDE = 384, RAW = 0.01, NMS_TILE = 0.7, NMS_ALL = 0.3, MAX_D
 // Both models are YOLO11s trained on the same 87 photos. Each has its own default threshold: the one its measured
 // accuracy is stated at. The slider keeps the visitor's setting when the model is switched.
 const MODELS = {
-  hn:   { file: 'model/yolo11s-hn-f0.onnx', label: 'Hard negatives (fold 0)', thr: 0.25 },
-  run2: { file: 'model/yolo11s-run2.onnx',  label: 'Run 2',                   thr: 0.25 },
+  '04-cv-hard-negatives-f0': { file: 'model/yolo11s-04-cv-hard-negatives-f0.onnx', label: '04 Hard negatives (fold 0)', thr: 0.25 },
+  '02-maybe-masked':         { file: 'model/yolo11s-02-maybe-masked.onnx',         label: '02 Maybe masked',            thr: 0.25 },
 };
-const DEFAULT_MODEL = 'hn';
+const DEFAULT_MODEL = '04-cv-hard-negatives-f0';
 const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
 const EXAMPLES = [
   ['20261001_134106', 'wide, shade, square tiles and manholes'],
@@ -23,7 +23,7 @@ const CPU_NOTE = 'This browser offers no WebGPU, so detection runs on the CPU: e
 const PARAMS = new URLSearchParams(location.search);   // ?cpu=1 skips WebGPU; ?example=STEM runs one example at load
 const sessions = {};                                // model key -> InferenceSession
 let backend = '', current = null, runId = 0;         // current = {bitmap, dets, name}
-let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=run2 picks run 2
+let modelKey = MODELS[PARAMS.get('model')] ? PARAMS.get('model') : DEFAULT_MODEL;   // ?model=02-maybe-masked picks run 02
 
 function starts(n) {
   if (n <= TILE) return [0];

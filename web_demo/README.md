@@ -10,26 +10,32 @@ repository's main branch).
 A selector on the page switches between two models; switching runs detection again on the current photo. Both are
 YOLO11s trained on the same 87 train photos, so the four example photos (val photos) are unseen by both.
 
-- **Hard negatives (fold 0)**, the default: `model/yolo11s-hn-f0.onnx`, the fold 0 model of the hard-negative recipe
-  (`mask_hn`) in `docs/cross-validation.md`, final-epoch checkpoint (`last.pt`). The recipe is run 2's plus training
-  tiles centred on things that look like butts but are not.
-- **Run 2**: `model/yolo11s-run2.onnx`, run 2 of `docs/training-runs.md`, checkpoint `best.pt`.
+- **04 Hard negatives (fold 0)**, the default: `model/yolo11s-04-cv-hard-negatives-f0.onnx`, the fold 0 model of run
+  `04-cv-hard-negatives` in `docs/cross-validation.md`, final-epoch checkpoint (`last.pt`). The recipe is run 02's plus
+  training tiles centred on things that look like butts but are not.
+- **02 Maybe masked**: `model/yolo11s-02-maybe-masked.onnx`, run `02-maybe-masked` of `docs/training-runs.md`,
+  checkpoint `best.pt`.
+
+The number in a model's name is its run's place in the sequence of training runs.
 
 Measured accuracy (threshold 0.25 unless stated):
 
 | | Recall | False positives per photo | Source |
 |---|---|---|---|
-| Hard negatives (fold 0), 19 val photos | 82.6% (38 of 46) | 0.84 | `docs/cross-validation.md` |
-| Run 2, 19 val photos | 89.1% (41 of 46) | 2.37 | `docs/cross-validation.md` |
-| Hard-negative recipe, pooled over 106 photos (5 folds) | 83.8% | 1.31 | `docs/cross-validation.md` |
-| Run 2's recipe, pooled over 106 photos (5 folds) | 86.1% | 1.91 | `docs/cross-validation.md` |
+| 04 Hard negatives (fold 0), 19 val photos | 82.6% (38 of 46) | 0.84 | `docs/cross-validation.md` |
+| 02 Maybe masked, 19 val photos | 89.1% (41 of 46) | 2.37 | `docs/cross-validation.md` |
+| Recipe 04 (hard negatives), pooled over 106 photos (5 folds) | 83.8% | 1.31 | `docs/cross-validation.md` |
+| Recipe 02, as run `03-cv-baseline`, pooled over 106 photos (5 folds) | 86.1% | 1.91 | `docs/cross-validation.md` |
 
 - The pooled false-positive cut (0.60 per photo) is real by the paired bootstrap; the pooled recall difference
   (−2.3 points) is inside noise.
 - At equal recall the two recipes are about equal between 75% and 86% recall, so part of the gain at threshold 0.25
   comes from the hard-negative model scoring lower overall. At 88% recall the false positives per photo are 2.3
   (hard negatives) against 3.2; at 90%, 2.6 against 4.7. These are read from the pooled curves and have no interval.
-- Run 2's `best.pt` was selected by its score on the same val photos, which flatters it there.
+- Run `05-cv-more-empty-tiles` (recipe 02 with as many random butt-free tiles as recipe 04 has) cuts false positives
+  per photo to 1.51 (real against 1.91); recipe 04's further 0.20 is inside noise. Much of the hard-negative gain is
+  matched by more butt-free tiles of any kind.
+- 02's `best.pt` was selected by its score on the same val photos, which flatters it there.
 
 **Threshold:** each model's default is 0.25, the threshold its accuracy is stated at. The slider keeps the visitor's
 setting when the model is switched. The two models' scores are not on the same scale, and the info panel says so.
@@ -67,4 +73,4 @@ same for both models; the WebGPU path has not been timed on real GPU hardware.
 ## Run locally
 
 From this folder, `python3 -m http.server 8765`, then open http://127.0.0.1:8765/. `?cpu=1` skips WebGPU;
-`?example=STEM` runs one example at load; `?model=run2` starts with run 2.
+`?example=STEM` runs one example at load; `?model=02-maybe-masked` starts with run 02.
