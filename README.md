@@ -58,6 +58,13 @@ Full write-ups, readable on a phone:
 [cross-validation](https://lorinc.github.io/litter-detection-pipeline/docs/cross-validation.html)
 (`03-cv-baseline` to `06-cv-yolo11n`, paired comparisons, matched recall, speed).
 
+## Status and open questions
+
+Model development stops at these two detectors. What the work leaves open, the levers not yet tested (mined hard
+negatives, more varied data, tile-edge context, larger models, pretraining), what the numbers cannot yet tell
+(training noise, new locations, the trained models' size floor, robot hardware speed) and the robot design questions
+it raises are listed in [open questions and untested hypotheses](docs/open-questions.md).
+
 ## The pipeline is parametric
 
 Every setting lives in one JSON config (`pipeline/config.json`). Every script takes `--config PATH`, and paths in
