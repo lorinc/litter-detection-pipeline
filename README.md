@@ -56,7 +56,9 @@ Full write-ups, readable on a phone:
 [trained detectors against OWLv2](https://lorinc.github.io/litter-detection-pipeline/docs/training-runs.html)
 (this chart, runs `01-maybe-as-background` and `02-maybe-masked`, size and shot-type tables, known gaps) and
 [cross-validation](https://lorinc.github.io/litter-detection-pipeline/docs/cross-validation.html)
-(`03-cv-baseline` to `06-cv-yolo11n`, paired comparisons, matched recall, speed).
+(`03-cv-baseline` to `06-cv-yolo11n`, paired comparisons, matched recall, speed). The chart above as an
+[interactive page](https://lorinc.github.io/litter-detection-pipeline/docs/recall-fp-curve.html): hover shows the
+threshold, recall, false positives and precision at each point.
 
 ## Status and open questions
 
@@ -64,6 +66,20 @@ Model development stops at these two detectors. What the work leaves open, the l
 negatives, more varied data, tile-edge context, larger models, pretraining), what the numbers cannot yet tell
 (training noise, new locations, the trained models' size floor, robot hardware speed) and the robot design questions
 it raises are listed in [open questions and untested hypotheses](docs/open-questions.md).
+
+## Training and evaluating in a notebook
+
+Two notebooks in `pipeline/` reproduce a run on Kaggle or any machine with the dataset:
+
+- **`train.ipynb`** trains one detector from one recipe (`pipeline/recipes/*.json`, every setting of a run in one
+  file) on the 87 training photos and writes the trained weights with `run_config.json`, the exact settings used.
+  A `SMOKE_TEST` switch runs 1 epoch on 30% of the tiles to check the setup.
+- **`evaluate.ipynb`** scores those weights with the evaluation harness on the 19 validation photos (whole photos,
+  labelled blind) and draws recall against false positives per photo as an interactive Plotly chart, with the
+  published reference results (`docs/results/`) on the same axes.
+
+On Kaggle, add the dataset `lorinc/butt-field-2026-10-01` as input, turn internet on (the notebooks clone this
+repository) and choose a GPU for training. `pipeline/curve_plot.py` draws the same chart from any harness results.
 
 ## The pipeline is parametric
 
@@ -125,6 +141,9 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 - `docs/cross-validation.md`: 5-fold cross-validation of `03-cv-baseline`, `04-cv-hard-negatives`, `05-cv-more-empty-tiles` and `06-cv-yolo11n`.
 - `web_demo/`: a static page that runs the trained detector in the browser (see Web demo).
 - `docs/capture-protocol.md`: how to shoot the next photo set, and which weakness of the current one each rule removes.
+- `docs/recall-fp-curve.html`: the results chart as an interactive page; `docs/results/`: the harness results behind it.
+- `docs/open-questions.md`: open questions and untested hypotheses.
+- `pipeline/recipes/`: the cross-validation recipes, one complete config per file.
 
 | Script | What it does |
 |---|---|
@@ -137,7 +156,9 @@ trained on suggestion-assisted labels cannot hide the suggester's blind spots.
 | `perspective_check.py` | Ground-plane size check of detector boxes |
 | `export.py` | Square tiles and YOLO labels from full frames and JSON labels |
 | `train.py` | Ultralytics training on an export |
+| `train.ipynb`, `evaluate.ipynb` | One recipe trained and scored, step by step (see Training and evaluating in a notebook) |
 | `tiling.py`, `metrics.py`, `detectors.py`, `evaluate.py` | Evaluation harness: tiling, matching, detector adapters, full-frame scoring |
+| `curve_plot.py` | Interactive recall against false positives chart from harness results |
 | `run.py`, `publish.py` | Sync code, train one or more runs on Kaggle (one GPU each), download, evaluate |
 | `upload_kaggle.py` | Upload the image copies and labels as a Kaggle dataset (a new version if it exists) |
 
@@ -170,7 +191,7 @@ The complete dataset (125 street photos from one capture session in Valencia, Sp
 
 Run scripts from `pipeline/`, e.g. `python export.py --data DATA_DIR --out EXPORT_DIR`. Training runs need a Kaggle
 API token in `KAGGLE_API_TOKEN`. Dependencies: Python 3.12, torch, torchvision, transformers, ultralytics, pillow,
-numpy, scikit-learn, matplotlib, kaggle, kagglehub.
+numpy, scikit-learn, matplotlib, plotly, kaggle, kagglehub.
 
 ## Licence
 
