@@ -160,6 +160,7 @@
       "docs/training-runs.md": "output/complete/training-runs.md",
       "docs/fig/eval_runs_val.png": "output/complete/fig/eval_runs_val.png",
       "docs/cross-validation.md": "output/complete/cross-validation.md",
+      "docs/open-questions.md": "output/complete/open-questions.md",
       "docs/fig/cv_03-06.png": "output/complete/fig/cv_03-06.png",
       "docs/fig/progress_val.png": "output/complete/fig/progress_val.png",
       "docs/fig/web_demo_screenshot.png": "../13-web-demo/output/complete/fig/web_demo_screenshot.png",
