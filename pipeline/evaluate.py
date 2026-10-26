@@ -1,9 +1,11 @@
 """Evaluation harness: score any detector on whole frames of one split, the same way for every detector.
-usage: evaluate.py NAME [--config PATH] [--split val] [--out DIR]
+usage: evaluate.py NAME [--config PATH] [--split val] [--out DIR] [--data DIR] [--cache DIR]
 NAME is a key of eval.detectors in the config; its 'adapter' names a class in detectors.py and its 'threshold' is
 the detector's operating score threshold.
 Detection pass (resumable): each frame is run through the adapter (tiling, mapping back and merging happen inside
-it), timed after a warm-up, and every kept box is cached to <data_dir>/eval/<NAME>/<split>/<image>.json.
+it), timed after a warm-up, and every kept box is cached to <cache>/<NAME>/<split>/<image>.json (--cache, default
+<data_dir>/eval). --data: a directory laid out like <data_dir> (images/, labels/, split.json, meta.csv), e.g. the
+Kaggle dataset mount; default <data_dir>.
 Scoring: ground truth = annotator boxes of class 'butt'; 'maybe' boxes are neither finds nor misses, and detections
 on them are not false positives. A detection hits a box by the task 5 rule (centre inside, or IoU >= eval.match_iou).
 A butt is found when any detection at or above the threshold hits it; a false positive is a detection that hits no
@@ -19,15 +21,17 @@ import numpy as np,torch
 from PIL import Image
 from common import HERE,load_config,load_split
 import metrics,detectors
-cfg=load_config(); data=cfg['_data']; E=cfg['eval']
-name=next(a for i,a in enumerate(sys.argv[1:],1) if not a.startswith('--') and sys.argv[i-1] not in ('--config','--split','--out'))
+cfg=load_config(); E=cfg['eval']
+if '--data' in sys.argv: cfg['_data']=pathlib.Path(sys.argv[sys.argv.index('--data')+1])
+data=cfg['_data']
+name=next(a for i,a in enumerate(sys.argv[1:],1) if not a.startswith('--') and sys.argv[i-1] not in ('--config','--split','--out','--data','--cache'))
 which=sys.argv[sys.argv.index('--split')+1] if '--split' in sys.argv else E['split']
 entry=E['detectors'][name]; thr=entry['threshold']; bins=E['bins']
 split=load_split(cfg); meta={r['image']:r for r in csv.DictReader(open(data/'meta.csv'))}
 imgs=sorted(s for s,v in split.items() if v==which)
 det=detectors.ADAPTERS[entry['adapter']](cfg,entry)
 # detection pass
-cache=data/'eval'/name/which; cache.mkdir(parents=True,exist_ok=True); warm=False
+cache=(pathlib.Path(sys.argv[sys.argv.index('--cache')+1]) if '--cache' in sys.argv else data/'eval')/name/which; cache.mkdir(parents=True,exist_ok=True); warm=False
 for s in imgs:
     o=cache/f'{s}.json'
     if o.exists(): continue

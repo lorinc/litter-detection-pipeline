@@ -42,7 +42,7 @@ class YOLO:
     def warmup(self): torch.set_num_threads(self.e['threads']); self._tile(Image.new('RGB',(self.e['tile'],self.e['tile'])))
     def detect(self,im): return tiling.tiled(im,self.e['tile'],self.e['stride'],self.e['nms_iou'],self._tile,fit=True)
     def info(self,w,h):
-        net=self.model.model; x=torch.zeros(1,3,self.e['imgsz'],self.e['imgsz'])
+        net=self.model.model; x=torch.zeros(1,3,self.e['imgsz'],self.e['imgsz'],device=next(net.parameters()).device)
         with torch.no_grad(),FlopCounterMode(display=False) as fc: net(x)
         n=tiling.tiles(w,h,self.e['tile'],self.e['stride'],True)
         return {'params':sum(p.numel() for p in net.parameters()),'flops_per_tile':fc.get_total_flops(),
